@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import time
 
 # 3分間ネットワーキングの第0回〜第81回までを取得
-base_url = "https://www5e.biglobe.ne.jp/aji/3min/{:02d}.html"
+base_url = "https://www5e.biglobe.ne.jp/aji/3min/{:02d}.htm"
 
 with open("3min_networking.txt", "w", encoding="utf-8") as f:
     for i in range(82):
