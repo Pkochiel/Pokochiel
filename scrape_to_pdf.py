@@ -9,7 +9,7 @@ from reportlab.lib.pagesizes import A4
 # 日本語フォント登録
 pdfmetrics.registerFont(UnicodeCIDFont('HeiseiMin-W3'))
 
-BASE_URL = "https://www5e.biglobe.ne.jp/aji/3min/{:02d}.html"
+BASE_URL = "https://www5e.biglobe.ne.jp/aji/3min/{:02d}.htm"
 OUTPUT_PDF = "3min_networking.pdf"
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
