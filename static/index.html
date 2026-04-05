@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>人材派遣マッチング AIエージェント</title>
+  <style>
+    /* ── リセット & 変数 ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:        #2563eb;
+      --blue-dark:   #1d4ed8;
+      --blue-light:  #eff6ff;
+      --amber:       #f59e0b;
+      --amber-light: #fffbeb;
+      --green:       #22c55e;
+      --red:         #ef4444;
+      --gray-50:     #f8fafc;
+      --gray-100:    #f1f5f9;
+      --gray-200:    #e2e8f0;
+      --gray-400:    #94a3b8;
+      --gray-500:    #64748b;
+      --gray-700:    #334155;
+      --gray-900:    #0f172a;
+      --radius:      12px;
+      --shadow:      0 1px 3px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.08);
+      --shadow-lg:   0 4px 16px rgba(0,0,0,.12);
+    }
+
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo,
+                   'Yu Gothic UI', sans-serif;
+      background: var(--gray-100);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      color: var(--gray-900);
+      font-size: 14px;
+    }
+
+    /* ── ヘッダー ────────────────────────────────────────────────── */
+    header {
+      background: var(--blue);
+      color: #fff;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--shadow-lg);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    header .logo {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: rgba(255,255,255,.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    header h1 { font-size: 16px; font-weight: 600; flex: 1; }
+    .status-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; opacity: .9;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      transition: background .3s;
+    }
+    .status-dot.busy { background: var(--amber); }
+    .status-dot.error { background: var(--red); }
+
+    /* ── メインレイアウト ─────────────────────────────────────────── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+
+    /* ── チャットエリア ──────────────────────────────────────────── */
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 16px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      scroll-behavior: smooth;
+    }
+    #chat::-webkit-scrollbar { width: 6px; }
+    #chat::-webkit-scrollbar-track { background: transparent; }
+    #chat::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 3px; }
+
+    /* ── ウェルカムカード ─────────────────────────────────────────── */
+    .welcome {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+    .welcome h2 { font-size: 17px; color: var(--blue); margin-bottom: 8px; }
+    .welcome p  { color: var(--gray-500); line-height: 1.7; margin-bottom: 16px; }
+    .welcome-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 6px 14px;
+      border: 1.5px solid var(--blue);
+      color: var(--blue);
+      border-radius: 20px;
+      font-size: 13px;
+      cursor: pointer;
+      background: white;
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+    }
+    .chip:hover { background: var(--blue); color: white; }
+
+    /* ── メッセージ行 ────────────────────────────────────────────── */
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .row.user  { flex-direction: row-reverse; }
+    .row.agent { flex-direction: row; }
+
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .agent .avatar { background: var(--blue); color: white; }
+    .user  .avatar { background: var(--gray-500); color: white; }
+
+    .col { display: flex; flex-direction: column; gap: 4px; max-width: 80%; }
+    .row.user  .col { align-items: flex-end; }
+    .row.agent .col { align-items: flex-start; }
+
+    /* ── バブル ──────────────────────────────────────────────────── */
+    .bubble {
+      padding: 11px 15px;
+      border-radius: var(--radius);
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .agent .bubble {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-top-left-radius: 4px;
+      box-shadow: var(--shadow);
+    }
+    .user .bubble {
+      background: var(--blue);
+      color: white;
+      border-top-right-radius: 4px;
+      box-shadow: var(--shadow);
+    }
+
+    /* ストリーミングカーソル */
+    .cursor::after {
+      content: '▌';
+      animation: blink .8s step-end infinite;
+      color: var(--blue);
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── ツールインジケーター ────────────────────────────────────── */
+    .tool-card {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--amber-light);
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: #92400e;
+      max-width: 80%;
+    }
+    .tool-card .spinner {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid #f59e0b;
+      border-top-color: transparent;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    .tool-card .done-icon { color: var(--green); font-size: 15px; flex-shrink: 0; }
+    .tool-name { font-weight: 600; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* タイムスタンプ */
+    .ts { font-size: 11px; color: var(--gray-400); }
+
+    /* ── クイックアクション ──────────────────────────────────────── */
+    #quick-actions {
+      padding: 10px 16px 4px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    /* ── 入力エリア ──────────────────────────────────────────────── */
+    #input-area {
+      padding: 12px 16px 16px;
+      background: white;
+      border-top: 1px solid var(--gray-200);
+      flex-shrink: 0;
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    #msg {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      max-height: 120px;
+      line-height: 1.5;
+      transition: border-color .2s;
+    }
+    #msg:focus { outline: none; border-color: var(--blue); }
+    #msg::placeholder { color: var(--gray-400); }
+    #msg:disabled { background: var(--gray-50); }
+
+    #send-btn {
+      padding: 10px 20px;
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: background .15s, opacity .15s;
+      height: 42px;
+    }
+    #send-btn:hover:not(:disabled) { background: var(--blue-dark); }
+    #send-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── ツール名マッピング ───────────────────────────────────────── */
+  </style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<header>
+  <div class="logo">🤝</div>
+  <h1>人材派遣マッチング AIエージェント</h1>
+  <div class="status-badge">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">接続中...</span>
+  </div>
+</header>
+
+<!-- メイン -->
+<main>
+  <!-- チャットエリア -->
+  <div id="chat">
+    <div class="welcome">
+      <h2>👋 何でも聞いてください</h2>
+      <p>案件・人材の確認、AIマッチング、メールからの案件登録などをサポートします。<br>
+         下のボタンから始めるか、自由に話しかけてください。</p>
+      <div class="welcome-chips">
+        <button class="chip" onclick="sendQuick('今週の有効求人を見せて')">📋 今週の有効求人</button>
+        <button class="chip" onclick="sendQuick('稼働可能な人材を一覧表示して')">👥 稼働可能人材</button>
+        <button class="chip" onclick="sendQuick('全件マッチングをかけて')">🔍 全件マッチング</button>
+        <button class="chip" onclick="sendQuick('直近のマッチング結果を見せて')">📊 マッチング履歴</button>
+        <button class="chip" onclick="sendQuick('Pythonエンジニアの案件を探して')">🔎 Python案件を検索</button>
+        <button class="chip" onclick="sendQuick('東京勤務の人材は？')">🗺️ 東京の人材を検索</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- クイックアクション（常時表示） -->
+  <div id="quick-actions">
+    <button class="chip" onclick="sendQuick('有効求人一覧')">有効求人</button>
+    <button class="chip" onclick="sendQuick('稼働可能人材一覧')">稼働人材</button>
+    <button class="chip" onclick="sendQuick('全件マッチング実行')">マッチング</button>
+    <button class="chip" onclick="sendQuick('マッチング結果')">結果確認</button>
+  </div>
+
+  <!-- 入力エリア -->
+  <div id="input-area">
+    <div class="input-row">
+      <textarea id="msg" rows="1"
+        placeholder="メッセージを入力（Shift+Enter で改行 / Enter で送信）"
+        oninput="autoResize(this)"
+        onkeydown="handleKey(event)"></textarea>
+      <button id="send-btn" onclick="sendMessage()">送信</button>
+    </div>
+  </div>
+</main>
+
+<script>
+  // ── ツール名の日本語表示マッピング ────────────────────────────
+  const TOOL_LABELS = {
+    get_valid_jobs:          '有効求人を取得',
+    get_active_personnel:    '稼働可能人材を取得',
+    get_job_detail:          '案件詳細を取得',
+    get_person_detail:       '人材詳細を取得',
+    search_jobs:             '案件を検索',
+    search_personnel:        '人材を検索',
+    run_full_matching:       '全件マッチングを実行（Batch API）',
+    match_single_job:        '案件マッチングを実行',
+    get_matching_history:    'マッチング履歴を取得',
+    parse_and_register_email:'メールから案件を抽出・登録',
+    register_person:         '人材を登録',
+  };
+
+  // ── WebSocket 接続 ────────────────────────────────────────────
+  let ws;
+  let currentBubble   = null;   // ストリーミング中のバブル要素
+  let currentToolCard = null;   // 実行中のツールカード
+  let busy = false;
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+    ws.onopen = () => {
+      setStatus('接続済み', 'green');
+    };
+
+    ws.onclose = () => {
+      setStatus('切断 – 再接続中...', 'error');
+      setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => {
+      setStatus('接続エラー', 'error');
+    };
+
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      handleEvent(data);
+    };
+  }
+
+  function setStatus(text, state) {
+    document.getElementById('status-text').textContent = text;
+    const dot = document.getElementById('status-dot');
+    dot.className = 'status-dot' + (state === 'green' ? '' : ` ${state}`);
+  }
+
+  // ── イベントハンドラ ──────────────────────────────────────────
+  function handleEvent(data) {
+    switch (data.type) {
+
+      case 'agent_start':
+        // エージェントが返答を開始 → 新しいバブルを作成
+        currentBubble = createAgentBubble();
+        setStatus('処理中...', 'busy');
+        setInputEnabled(false);
+        break;
+
+      case 'text':
+        // ストリーミングテキストをバブルに追記
+        if (currentBubble) {
+          const raw = currentBubble.dataset.raw || '';
+          currentBubble.dataset.raw = raw + data.content;
+          currentBubble.innerHTML = escapeHtml(raw + data.content);
+          currentBubble.classList.add('cursor');
+        }
+        scrollToBottom();
+        break;
+
+      case 'tool_start':
+        // ツール実行開始インジケーター
+        currentBubble && currentBubble.classList.remove('cursor');
+        currentBubble = null;
+        currentToolCard = createToolCard(data.name, false);
+        scrollToBottom();
+        break;
+
+      case 'tool_end':
+        // ツール完了 → スピナーをチェックマークに変更
+        if (currentToolCard) {
+          const spinner = currentToolCard.querySelector('.spinner');
+          if (spinner) {
+            spinner.outerHTML = '<span class="done-icon">✓</span>';
+          }
+          currentToolCard = null;
+        }
+        // 次の返答用に新しいバブルを準備
+        currentBubble = createAgentBubble();
+        break;
+
+      case 'done':
+        // 返答完了
+        currentBubble && currentBubble.classList.remove('cursor');
+        currentBubble = null;
+        setStatus('接続済み', 'green');
+        setInputEnabled(true);
+        document.getElementById('msg').focus();
+        scrollToBottom();
+        break;
+
+      case 'error':
+        currentBubble && currentBubble.classList.remove('cursor');
+        appendError(data.content);
+        setStatus('接続済み', 'green');
+        setInputEnabled(true);
+        break;
+    }
+  }
+
+  // ── DOM ヘルパー ──────────────────────────────────────────────
+  function now() {
+    return new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function createRow(role) {
+    const row = document.createElement('div');
+    row.className = `row ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = role === 'agent' ? '🤝' : '👤';
+
+    const col = document.createElement('div');
+    col.className = 'col';
+
+    row.appendChild(avatar);
+    row.appendChild(col);
+    document.getElementById('chat').appendChild(row);
+    return col;
+  }
+
+  function createAgentBubble() {
+    const col    = createRow('agent');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.dataset.raw = '';
+    const ts = document.createElement('div');
+    ts.className = 'ts';
+    ts.textContent = now();
+    col.appendChild(bubble);
+    col.appendChild(ts);
+    scrollToBottom();
+    return bubble;
+  }
+
+  function createUserBubble(text) {
+    const col    = createRow('user');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    const ts = document.createElement('div');
+    ts.className = 'ts';
+    ts.textContent = now();
+    col.appendChild(bubble);
+    col.appendChild(ts);
+  }
+
+  function createToolCard(toolName, done) {
+    const chat = document.getElementById('chat');
+    const card = document.createElement('div');
+    card.className = 'tool-card';
+
+    const icon = done
+      ? '<span class="done-icon">✓</span>'
+      : '<div class="spinner"></div>';
+    const label = TOOL_LABELS[toolName] || toolName;
+
+    card.innerHTML = `${icon}<span>🔧 <span class="tool-name">${label}</span></span>`;
+    chat.appendChild(card);
+    return card;
+  }
+
+  function appendError(msg) {
+    const chat = document.createElement('div');
+    chat.style.cssText = 'color:#ef4444;font-size:13px;padding:8px 16px;';
+    chat.textContent = '⚠️ ' + msg;
+    document.getElementById('chat').appendChild(chat);
+    scrollToBottom();
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+  }
+
+  function scrollToBottom() {
+    const chat = document.getElementById('chat');
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function setInputEnabled(enabled) {
+    busy = !enabled;
+    document.getElementById('msg').disabled = !enabled;
+    document.getElementById('send-btn').disabled = !enabled;
+    document.querySelectorAll('.chip').forEach(b => b.disabled = !enabled);
+  }
+
+  // ── メッセージ送信 ────────────────────────────────────────────
+  function sendMessage() {
+    if (busy) return;
+    const input = document.getElementById('msg');
+    const text  = input.value.trim();
+    if (!text) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      alert('サーバーに接続されていません。ページを再読み込みしてください。');
+      return;
+    }
+    createUserBubble(text);
+    ws.send(JSON.stringify({ message: text }));
+    input.value = '';
+    input.style.height = '';
+    scrollToBottom();
+  }
+
+  function sendQuick(text) {
+    if (busy) return;
+    document.getElementById('msg').value = text;
+    sendMessage();
+  }
+
+  // ── キー操作 ─────────────────────────────────────────────────
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }
+
+  // ── 起動 ─────────────────────────────────────────────────────
+  connect();
+</script>
+</body>
+</html>
