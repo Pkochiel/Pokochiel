@@ -3,7 +3,7 @@
 import csv
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -89,6 +89,34 @@ class SheetsManager:
                 return job
         return None
 
+    def list_valid_jobs(self, days: int = 14) -> list[dict]:
+        """
+        有効求人（本日から過去N日以内に登録、ステータスが募集中）を返す。
+
+        Args:
+            days: 有効とする日数（デフォルト14日）
+
+        Returns:
+            有効求人のリスト（登録日降順）
+        """
+        cutoff = datetime.now() - timedelta(days=days)
+        valid = []
+        for job in self.list_jobs():
+            # ステータスが「募集中」または未設定のみ対象
+            if job.get("ステータス", "募集中") not in ("募集中", ""):
+                continue
+            reg_str = str(job.get("登録日", "")).strip()
+            if not reg_str:
+                continue
+            try:
+                reg_date = datetime.strptime(reg_str, "%Y-%m-%d")
+            except ValueError:
+                continue
+            if reg_date >= cutoff:
+                valid.append(job)
+        valid.sort(key=lambda j: j.get("登録日", ""), reverse=True)
+        return valid
+
     def import_jobs_csv(self, csv_path: str) -> int:
         """CSVから案件を一括インポート。追加件数を返す。"""
         count = 0
@@ -126,6 +154,13 @@ class SheetsManager:
         records = ws.get_all_records()
         return [r for r in records if r.get("ID")]
 
+    def list_active_personnel(self) -> list[dict]:
+        """稼働可能な人材のみ返す"""
+        return [
+            p for p in self.list_personnel()
+            if p.get("ステータス", "稼働可能") in ("稼働可能", "")
+        ]
+
     def import_personnel_csv(self, csv_path: str) -> int:
         """CSVから人材を一括インポート。追加件数を返す。"""
         count = 0
@@ -155,3 +190,38 @@ class SheetsManager:
             ]
             ws.append_row(row)
         return len(results)
+
+    def save_all_matching_results(
+        self, job_results: dict[str, tuple[dict, list[dict]]]
+    ) -> int:
+        """
+        複数案件のマッチング結果を一括保存する（行のバッチ追加で高速化）。
+
+        Args:
+            job_results: {job_id: (job_dict, results_list)} の辞書
+
+        Returns:
+            保存した行数合計
+        """
+        ws = self._get_sheet(MATCHING_SHEET)
+        base_id = len(ws.get_all_values())
+        rows = []
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        for job, results in job_results.values():
+            for r in results:
+                rows.append([
+                    str(base_id + len(rows)),
+                    now_str,
+                    str(job.get("ID", "")),
+                    job.get("案件名", ""),
+                    str(r.get("人材ID", "")),
+                    r.get("氏名", ""),
+                    str(r.get("スコア", "")),
+                    r.get("理由", ""),
+                    r.get("推奨度", ""),
+                ])
+
+        if rows:
+            ws.append_rows(rows)
+        return len(rows)

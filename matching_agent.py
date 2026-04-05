@@ -1,7 +1,10 @@
 """AIによる案件・人材マッチング（Claude API使用）"""
 
 import json
+import time
 import anthropic
+from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
+from anthropic.types.messages.batch_create_params import Request
 from pydantic import BaseModel
 
 MATCHING_SYSTEM = """あなたは人材派遣会社のベテランコンサルタントです。
@@ -97,6 +100,148 @@ def match_personnel_to_job(
     # スコア降順でソートし上位N件を返す
     results.sort(key=lambda x: x["スコア"], reverse=True)
     return results[:top_n]
+
+
+_BATCH_SIZE = 10_000  # Batch API の1バッチ上限
+
+_SCORE_SCHEMA = {
+    "type": "json_schema",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "スコア": {"type": "integer", "description": "0〜100のマッチングスコア"},
+            "理由": {"type": "string", "description": "マッチング理由（3〜5文）"},
+            "推奨度": {
+                "type": "string",
+                "enum": ["強く推奨", "推奨", "条件付き推奨", "非推奨"],
+            },
+        },
+        "required": ["スコア", "理由", "推奨度"],
+        "additionalProperties": False,
+    },
+}
+
+
+def batch_match_all_jobs(
+    valid_jobs: list[dict],
+    active_personnel: list[dict],
+    client: anthropic.Anthropic,
+    top_n: int = 5,
+    min_score: int = 0,
+) -> dict[str, tuple[dict, list[dict]]]:
+    """
+    有効求人×稼働可能人材の全組み合わせをBatch APIで並列評価する。
+
+    Args:
+        valid_jobs: 有効求人リスト（list_valid_jobs の結果）
+        active_personnel: 稼働可能人材リスト（list_active_personnel の結果）
+        client: Anthropic クライアント
+        top_n: 案件ごとに保存する上位件数
+        min_score: この閾値以上のみ結果に含める
+
+    Returns:
+        {job_id: (job_dict, sorted_results)} の辞書
+    """
+    if not valid_jobs or not active_personnel:
+        return {}
+
+    total_pairs = len(valid_jobs) * len(active_personnel)
+    print(f"  評価対象: {len(valid_jobs)} 案件 × {len(active_personnel)} 名 = {total_pairs} ペア")
+
+    # ── リクエストを構築 ──────────────────────────────────────────────────
+    requests_list: list[Request] = []
+    for job in valid_jobs:
+        job_text = _format_job(job)
+        for person in active_personnel:
+            person_text = _format_person(person)
+            custom_id = f"{job['ID']}::{person['ID']}"
+            requests_list.append(
+                Request(
+                    custom_id=custom_id,
+                    params=MessageCreateParamsNonStreaming(
+                        model="claude-opus-4-6",
+                        max_tokens=512,
+                        system=MATCHING_SYSTEM,
+                        messages=[{
+                            "role": "user",
+                            "content": (
+                                f"【案件情報】\n{job_text}\n\n"
+                                f"【人材プロフィール】\n{person_text}\n\n"
+                                "この人材を上記案件に推薦すべきか評価してください。"
+                            ),
+                        }],
+                        output_config={"format": _SCORE_SCHEMA},
+                    ),
+                )
+            )
+
+    # ── バッチ送信（10000件ずつ分割） ─────────────────────────────────────
+    raw_results: dict[str, dict] = {}
+    total_batches = (len(requests_list) + _BATCH_SIZE - 1) // _BATCH_SIZE
+
+    for batch_num, chunk_start in enumerate(range(0, len(requests_list), _BATCH_SIZE), 1):
+        chunk = requests_list[chunk_start: chunk_start + _BATCH_SIZE]
+        print(f"  バッチ {batch_num}/{total_batches} を送信中（{len(chunk)} ペア）...")
+
+        batch = client.messages.batches.create(requests=chunk)
+        print(f"  バッチID: {batch.id}")
+
+        while True:
+            batch = client.messages.batches.retrieve(batch.id)
+            counts = batch.request_counts
+            done = counts.succeeded + counts.errored + counts.canceled + counts.expired
+            print(
+                f"  処理中... {done}/{len(chunk)} 完了"
+                f"（成功: {counts.succeeded}, エラー: {counts.errored}）   ",
+                end="\r",
+            )
+            if batch.processing_status == "ended":
+                break
+            time.sleep(15)
+
+        print(f"\n  バッチ {batch_num} 完了 → 成功: {batch.request_counts.succeeded} 件")
+
+        for result in client.messages.batches.results(batch.id):
+            if result.result.type != "succeeded":
+                continue
+            text = next(
+                (b.text for b in result.result.message.content if b.type == "text"),
+                None,
+            )
+            if not text:
+                continue
+            try:
+                raw_results[result.custom_id] = json.loads(text)
+            except json.JSONDecodeError:
+                pass
+
+    # ── 結果を案件ごとに集約・ソート ─────────────────────────────────────
+    person_map = {str(p["ID"]): p for p in active_personnel}
+    job_map = {str(j["ID"]): j for j in valid_jobs}
+
+    # {job_id: [(score, result_dict), ...]}
+    grouped: dict[str, list] = {str(j["ID"]): [] for j in valid_jobs}
+
+    for custom_id, data in raw_results.items():
+        job_id, person_id = custom_id.split("::", 1)
+        score = int(data.get("スコア", 0))
+        if score < min_score:
+            continue
+        person = person_map.get(person_id, {})
+        grouped[job_id].append({
+            "人材ID": person_id,
+            "氏名": person.get("氏名", ""),
+            "スコア": score,
+            "理由": data.get("理由", ""),
+            "推奨度": data.get("推奨度", ""),
+        })
+
+    output: dict[str, tuple[dict, list[dict]]] = {}
+    for job_id, results in grouped.items():
+        results.sort(key=lambda x: x["スコア"], reverse=True)
+        output[job_id] = (job_map[job_id], results[:top_n])
+
+    return output
 
 
 def _format_job(job: dict) -> str:
