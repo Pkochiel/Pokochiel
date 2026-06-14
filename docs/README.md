@@ -19,16 +19,14 @@ iPad / iPhone のホーム画面に追加して、ネイティブアプリのよ
 ## 公開方法（GitHub Pages・無料）
 
 PWA は HTTPS 配信が必要です。GitHub Pages を使うと無料で配信できます。
+このアプリは `docs/` フォルダに置いてあるので、ブランチから直接公開できます。
 
 1. GitHub でこのリポジトリを開く
 2. **Settings** → **Pages** を開く
-3. **Build and deployment** の **Source** を **GitHub Actions** に設定
-4. 同梱の `.github/workflows/deploy-task-manager.yml` が自動で実行され、公開されます
-5. 数分後、Pages の画面に表示される URL が公開アドレスです
-   （例: `https://<ユーザー名>.github.io/<リポジトリ名>/`）
-
-> 手動で行う場合は Source を「Deploy from a branch」にし、ブランチと
-> `/task-manager`（または対象フォルダ）を選んでも公開できます。
+3. **Build and deployment** の **Source** を **「Deploy from a branch」** にする
+4. **Branch** で `claude/elegant-hopper-2btuxf`、フォルダは **`/docs`** を選んで **Save**
+5. 数分後、Pages の画面の上部に公開 URL が表示されます
+   （例: `https://pkochiel.github.io/Pokochiel/`）
 
 ---
 
