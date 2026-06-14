@@ -1,0 +1,41 @@
+name: Deploy task-manager to GitHub Pages
+
+# task-manager/ 配下のPWAを GitHub Pages へ公開するワークフロー。
+# 有効化方法: リポジトリの Settings > Pages > Build and deployment の
+# Source を「GitHub Actions」に設定する。以降、対象ブランチへのpushで自動公開される。
+
+on:
+  push:
+    branches:
+      - claude/elegant-hopper-2btuxf
+    paths:
+      - 'task-manager/**'
+      - '.github/workflows/deploy-task-manager.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時実行を1つに制限（公開の取りこぼし・競合を防ぐ）
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Upload task-manager as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: task-manager
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

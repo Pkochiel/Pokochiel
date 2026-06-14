@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="予定">
+<meta name="application-name" content="予定">
+<meta name="theme-color" content="#d4622a">
+<title>予定</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<style>
+  :root {
+    --ink: #1a1d29;
+    --paper: #f5f3ee;
+    --card: #ffffff;
+    --line: #e4e0d6;
+    --muted: #8a8678;
+    --accent: #d4622a;
+    --accent-soft: #f6e3d8;
+    --done: #a8c4a2;
+    --shadow: 0 1px 3px rgba(40,35,25,.06), 0 8px 24px rgba(40,35,25,.05);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    /* ノッチ・ホームインジケータ（セーフエリア）に対応 */
+    padding: 0 calc(28px + env(safe-area-inset-right)) 0 calc(28px + env(safe-area-inset-left));
+  }
+
+  header {
+    /* ステータスバー（black-translucent）に潜り込まないよう上部に余白を足す */
+    padding: calc(40px + env(safe-area-inset-top)) 0 18px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--ink);
+  }
+  .title {
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .title .dot { color: var(--accent); }
+  .date {
+    font-size: 14px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  .stats {
+    display: flex;
+    gap: 8px;
+    padding: 16px 0 4px;
+  }
+  .pill {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .pill .n { font-size: 26px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .pill .l { font-size: 12px; color: var(--muted); margin-top: 5px; font-weight: 600; letter-spacing: .03em; }
+  .pill.accent .n { color: var(--accent); }
+  .pill.green .n { color: #5e8a55; }
+
+  .addbar {
+    display: flex;
+    gap: 10px;
+    padding: 18px 0 14px;
+  }
+  #input {
+    flex: 1;
+    font-family: inherit;
+    font-size: 18px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    outline: none;
+    transition: border-color .15s;
+  }
+  #input:focus { border-color: var(--accent); }
+  #input::placeholder { color: var(--muted); }
+  .addbtn {
+    font-family: inherit;
+    font-size: 28px;
+    font-weight: 600;
+    width: 58px;
+    border: none;
+    border-radius: 16px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: transform .1s, opacity .15s;
+  }
+  .addbtn:active { transform: scale(.94); }
+
+  .timebar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 4px 16px;
+  }
+  .timebar label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .timebar input[type="time"] {
+    font-family: inherit;
+    font-size: 16px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--ink);
+    outline: none;
+  }
+  .timebar input[type="time"]:focus { border-color: var(--accent); }
+  .timebar .tilde { color: var(--muted); font-weight: 600; }
+
+  .filter {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .filter.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  .list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(28px + env(safe-area-inset-bottom));
+  }
+  .task {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow);
+    animation: pop .2s ease;
+  }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .check {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    cursor: pointer;
+    display: grid; place-items: center;
+    transition: all .15s;
+  }
+  .check svg { width: 16px; height: 16px; stroke: #fff; stroke-width: 3; fill: none; opacity: 0; transition: opacity .15s; }
+  .task.done .check { background: var(--done); border-color: var(--done); }
+  .task.done .check svg { opacity: 1; }
+  .label {
+    flex: 1;
+    font-size: 18px;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .task .body { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .task .time {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .02em;
+  }
+  .task.done .time { color: var(--muted); }
+  .task.now {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow);
+  }
+  .task.now .time::after {
+    content: " ・進行中";
+    color: var(--accent);
+  }
+  .task.done .label { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--done); }
+  .del {
+    flex-shrink: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 22px;
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    cursor: pointer;
+    opacity: .5;
+    transition: opacity .15s, background .15s;
+  }
+  .del:active { background: var(--accent-soft); color: var(--accent); opacity: 1; }
+
+  .empty {
+    text-align: center;
+    padding: 70px 20px;
+    color: var(--muted);
+  }
+  .empty .big { font-size: 46px; margin-bottom: 12px; }
+  .empty .msg { font-size: 16px; }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 12px;
+  }
+  .filters { display: flex; gap: 6px; }
+  .viewtoggle {
+    display: flex;
+    gap: 4px;
+    background: var(--line);
+    border-radius: 999px;
+    padding: 3px;
+  }
+  .vbtn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .vbtn.on { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+
+  .datenav { display: flex; align-items: center; gap: 8px; }
+  .navbtn {
+    font-family: inherit;
+    font-size: 24px;
+    font-weight: 700;
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    line-height: 1;
+    transition: transform .1s;
+  }
+  .navbtn:active { transform: scale(.92); }
+  .today-btn {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 0 16px;
+    height: 40px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+  .date-label {
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    padding: 10px 2px 0;
+  }
+  .date-label.is-today { color: var(--accent); }
+
+  /* modal */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(26,29,41,.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 24px;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 22px;
+    padding: 26px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 20px 60px rgba(26,29,41,.3);
+  }
+  .modal h3 { font-size: 19px; font-weight: 800; margin-bottom: 4px; }
+  .modal .m-sub { font-size: 14px; color: var(--muted); margin-bottom: 20px; word-break: break-word; }
+  .modal .m-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .modal .m-row label { font-size: 14px; font-weight: 700; color: var(--muted); width: 44px; }
+  .modal .m-row input[type="time"] {
+    flex: 1;
+    font-family: inherit;
+    font-size: 17px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--paper);
+    color: var(--ink);
+    outline: none;
+  }
+  .modal .m-row input:focus { border-color: var(--accent); }
+  .modal .m-actions { display: flex; gap: 10px; margin-top: 22px; }
+  .modal button {
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 13px;
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    flex: 1;
+  }
+  .modal .btn-cancel { background: var(--line); color: var(--ink); }
+  .modal .btn-save { background: var(--accent); color: #fff; }
+  .modal .btn-clear { background: none; color: var(--muted); flex: 0 0 auto; padding: 13px 8px; font-size: 14px; }
+
+  /* timeline */
+  .timeline {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(28px + env(safe-area-inset-bottom));
+    position: relative;
+  }
+  .hour {
+    display: flex;
+    min-height: 56px;
+    position: relative;
+  }
+  .hour .h-label {
+    flex-shrink: 0;
+    width: 56px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    padding-top: 2px;
+  }
+  .hour .h-track {
+    flex: 1;
+    border-top: 1px solid var(--line);
+    position: relative;
+  }
+  .ev {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    background: var(--accent-soft);
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    padding: 6px 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+  }
+  .ev .ev-title { font-size: 15px; font-weight: 700; line-height: 1.25; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .ev .ev-time { font-size: 12px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ev.done { background: #eef2ec; border-left-color: var(--done); opacity: .75; }
+  .ev.done .ev-title { text-decoration: line-through; color: var(--muted); }
+  .ev.done .ev-time { color: var(--muted); }
+  .nowline {
+    position: absolute;
+    left: 56px; right: 0;
+    height: 2px;
+    background: #e23b3b;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .nowline::before {
+    content: "";
+    position: absolute;
+    left: -4px; top: -3px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #e23b3b;
+  }
+  .untimed {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 2px dashed var(--line);
+  }
+  .untimed .ut-head { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .task { animation: none; }
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">予定<span class="dot">.</span></div>
+    <div class="datenav">
+      <button class="navbtn" id="prev" aria-label="前の日">‹</button>
+      <button class="today-btn" id="todaybtn">今日</button>
+      <button class="navbtn" id="next" aria-label="次の日">›</button>
+    </div>
+  </header>
+  <div class="date-label" id="date"></div>
+
+  <div class="stats">
+    <div class="pill"><div class="n" id="s-total">0</div><div class="l">全タスク</div></div>
+    <div class="pill accent"><div class="n" id="s-open">0</div><div class="l">未完了</div></div>
+    <div class="pill green"><div class="n" id="s-done">0</div><div class="l">完了</div></div>
+  </div>
+
+  <div class="addbar">
+    <input id="input" type="text" placeholder="やることを入力…" autocomplete="off">
+    <button class="addbtn" id="add">＋</button>
+  </div>
+  <div class="timebar">
+    <label>開始 <input id="start" type="time"></label>
+    <span class="tilde">〜</span>
+    <label>終了 <input id="end" type="time"></label>
+  </div>
+
+  <div class="toolbar">
+    <div class="filters">
+      <button class="filter on" data-f="all">すべて</button>
+      <button class="filter" data-f="open">未完了</button>
+      <button class="filter" data-f="done">完了</button>
+    </div>
+    <div class="viewtoggle">
+      <button class="vbtn on" data-v="list">リスト</button>
+      <button class="vbtn" data-v="timeline">タイムライン</button>
+    </div>
+  </div>
+
+  <div class="list" id="list"></div>
+  <div class="timeline" id="timeline" hidden></div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3>時間を変更</h3>
+    <div class="m-sub" id="m-task"></div>
+    <div class="m-row"><label>開始</label><input type="time" id="m-start"></div>
+    <div class="m-row"><label>終了</label><input type="time" id="m-end"></div>
+    <div class="m-actions">
+      <button class="btn-clear" id="m-clear">時刻を消す</button>
+      <button class="btn-cancel" id="m-cancel">キャンセル</button>
+      <button class="btn-save" id="m-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const KEY = 'ipad_tasks_v1';
+  let tasks = [];
+  let filter = 'all';
+  let view = 'list';
+
+  // YYYY-MM-DD 文字列で日付を扱う
+  function ymd(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  const todayStr = ymd(new Date());
+  let currentDate = todayStr;
+
+  function shiftDate(days) {
+    const [y,m,d] = currentDate.split('-').map(Number);
+    const dt = new Date(y, m-1, d + days);
+    currentDate = ymd(dt);
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      tasks = raw ? JSON.parse(raw) : [];
+    } catch (e) { tasks = []; }
+    // 日付未設定の既存タスクは今日に割り当て
+    let changed = false;
+    tasks.forEach(t => { if (!t.date) { t.date = todayStr; changed = true; } });
+    if (changed) save();
+    render();
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(tasks)); }
+    catch (e) { console.error('保存に失敗しました', e); }
+  }
+
+  const $ = s => document.querySelector(s);
+  const list = $('#list'), input = $('#input'), startEl = $('#start'), endEl = $('#end'), timeline = $('#timeline');
+
+  function addTask() {
+    const t = input.value.trim();
+    if (!t) return;
+    tasks.unshift({
+      id: Date.now(),
+      text: t,
+      done: false,
+      date: currentDate,
+      start: startEl.value || '',
+      end: endEl.value || ''
+    });
+    input.value = ''; startEl.value = ''; endEl.value = '';
+    save(); render();
+  }
+  function toggle(id) {
+    const t = tasks.find(x => x.id === id);
+    if (t) { t.done = !t.done; save(); render(); }
+  }
+  function del(id) {
+    tasks = tasks.filter(x => x.id !== id);
+    save(); render();
+  }
+
+  function render() {
+    updateDateLabel();
+
+    // 表示中の日付のタスクだけを対象に
+    const dayTasks = tasks.filter(t => t.date === currentDate);
+    const total = dayTasks.length;
+    const done = dayTasks.filter(t => t.done).length;
+    $('#s-total').textContent = total;
+    $('#s-open').textContent = total - done;
+    $('#s-done').textContent = done;
+
+    let shown = dayTasks;
+    if (filter === 'open') shown = dayTasks.filter(t => !t.done);
+    if (filter === 'done') shown = dayTasks.filter(t => t.done);
+
+    shown = shown.slice().sort((a, b) => {
+      const ax = a.start || '99:99', bx = b.start || '99:99';
+      if (ax !== bx) return ax < bx ? -1 : 1;
+      return b.id - a.id;
+    });
+
+    list.hidden = view !== 'list';
+    timeline.hidden = view !== 'timeline';
+
+    if (view === 'list') renderList(shown);
+    else renderTimeline(shown);
+  }
+
+  function renderList(shown) {
+    if (!shown.length) {
+      const msg = filter === 'done' ? 'まだ完了したタスクはありません'
+                : filter === 'open' ? 'すべて片付きました。お疲れさまでした'
+                : '最初のタスクを追加しましょう';
+      const icon = filter === 'done' ? '🗂' : filter === 'open' ? '🎉' : '✏️';
+      list.innerHTML = `<div class="empty"><div class="big">${icon}</div><div class="msg">${msg}</div></div>`;
+      return;
+    }
+
+    const nowStr = new Date().toTimeString().slice(0, 5);
+    const isToday = currentDate === todayStr;
+
+    list.innerHTML = '';
+    shown.forEach(t => {
+      const inProgress = isToday && !t.done && t.start && t.end && t.start <= nowStr && nowStr < t.end;
+      const el = document.createElement('div');
+      el.className = 'task' + (t.done ? ' done' : '') + (inProgress ? ' now' : '');
+      let timeHtml = '';
+      if (t.start || t.end) {
+        const range = t.start && t.end ? `${t.start} 〜 ${t.end}`
+                    : t.start ? `${t.start} 〜`
+                    : `〜 ${t.end}`;
+        timeHtml = `<div class="time">${range}</div>`;
+      }
+      el.innerHTML = `
+        <div class="check" data-id="${t.id}" role="button" aria-label="完了切替">
+          <svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"></polyline></svg>
+        </div>
+        <div class="body">
+          ${timeHtml}
+          <div class="label">${escapeHtml(t.text)}</div>
+        </div>
+        <button class="del" data-del="${t.id}" aria-label="削除">×</button>`;
+      list.appendChild(el);
+    });
+  }
+
+  const HOUR_PX = 56;
+  function toMin(hhmm) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; }
+
+  function renderTimeline(shown) {
+    const timed = shown.filter(t => t.start);
+    const untimed = shown.filter(t => !t.start);
+
+    // 時間軸の範囲を決定（予定がなければ 8:00-20:00）
+    let minH = 8, maxH = 20;
+    timed.forEach(t => {
+      const sh = Math.floor(toMin(t.start) / 60);
+      const eh = t.end ? Math.ceil(toMin(t.end) / 60) : sh + 1;
+      minH = Math.min(minH, sh);
+      maxH = Math.max(maxH, eh);
+    });
+    minH = Math.max(0, minH); maxH = Math.min(24, maxH);
+
+    let html = '<div class="grid">';
+    for (let h = minH; h < maxH; h++) {
+      html += `<div class="hour"><div class="h-label">${String(h).padStart(2,'0')}:00</div><div class="h-track"></div></div>`;
+    }
+    html += '</div>';
+
+    // 予定ブロック
+    let blocks = '';
+    timed.forEach(t => {
+      const s = toMin(t.start);
+      const e = t.end ? toMin(t.end) : s + 30;
+      const top = (s - minH * 60) / 60 * HOUR_PX;
+      const height = Math.max(28, (e - s) / 60 * HOUR_PX - 4);
+      const range = t.end ? `${t.start} 〜 ${t.end}` : `${t.start} 〜`;
+      blocks += `
+        <div class="ev ${t.done ? 'done' : ''}" data-id="${t.id}"
+             style="top:${top}px;height:${height}px">
+          <div class="ev-time">${range}</div>
+          <div class="ev-title">${escapeHtml(t.text)}</div>
+        </div>`;
+    });
+
+    // 現在時刻ライン（今日を表示しているときのみ）
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    let nowHtml = '';
+    if (currentDate === todayStr && nowMin >= minH * 60 && nowMin <= maxH * 60) {
+      const top = (nowMin - minH * 60) / 60 * HOUR_PX;
+      nowHtml = `<div class="nowline" style="top:${top}px"></div>`;
+    }
+
+    let out = `<div class="tl-inner" style="position:relative">${html}
+      <div class="ev-layer" style="position:absolute;top:0;left:56px;right:0;bottom:0">${blocks}</div>
+      ${nowHtml}</div>`;
+
+    if (untimed.length) {
+      let ut = '<div class="untimed"><div class="ut-head">時刻未設定</div>';
+      untimed.forEach(t => {
+        ut += `<div class="task ${t.done ? 'done' : ''}" style="margin-bottom:8px">
+          <div class="check" data-id="${t.id}" role="button" aria-label="完了切替">
+            <svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"></polyline></svg>
+          </div>
+          <div class="body"><div class="label">${escapeHtml(t.text)}</div></div>
+          <button class="del" data-del="${t.id}" aria-label="削除">×</button>
+        </div>`;
+      });
+      ut += '</div>';
+      out += ut;
+    }
+
+    if (!timed.length && !untimed.length) {
+      out = `<div class="empty"><div class="big">🗓</div><div class="msg">予定を追加すると時間軸に表示されます</div></div>`;
+    }
+
+    timeline.innerHTML = out;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  $('#add').addEventListener('click', addTask);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+  list.addEventListener('click', e => {
+    const c = e.target.closest('.check');
+    const d = e.target.closest('.del');
+    if (c) toggle(Number(c.dataset.id));
+    if (d) del(Number(d.dataset.del));
+  });
+  timeline.addEventListener('click', e => {
+    const c = e.target.closest('.check');
+    const d = e.target.closest('.del');
+    const ev = e.target.closest('.ev');
+    if (c) { toggle(Number(c.dataset.id)); return; }
+    if (d) { del(Number(d.dataset.del)); return; }
+    if (ev) toggle(Number(ev.dataset.id));
+  });
+  document.querySelectorAll('.vbtn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.vbtn').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      view = b.dataset.v;
+      render();
+    });
+  });
+  document.querySelectorAll('.filter').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.filter').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      filter = b.dataset.f;
+      render();
+    });
+  });
+
+  // ---- 日付ラベル・ナビゲーション ----
+  function updateDateLabel() {
+    const [y,m,d] = currentDate.split('-').map(Number);
+    const dt = new Date(y, m-1, d);
+    let label = dt.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
+    const [ty,tm,td] = todayStr.split('-').map(Number);
+    const diff = Math.round((dt - new Date(ty, tm-1, td)) / 86400000);
+    if (diff === 0) label += '（今日）';
+    else if (diff === 1) label += '（明日）';
+    else if (diff === -1) label += '（昨日）';
+    const el = $('#date');
+    el.textContent = label;
+    el.classList.toggle('is-today', currentDate === todayStr);
+  }
+
+  $('#prev').addEventListener('click', () => { shiftDate(-1); render(); });
+  $('#next').addEventListener('click', () => { shiftDate(1); render(); });
+  $('#todaybtn').addEventListener('click', () => { currentDate = todayStr; render(); });
+
+  // ---- 長押しで時間変更モーダル ----
+  const overlay = $('#overlay');
+  let editingId = null;
+  let pressTimer = null;
+
+  function openEdit(id) {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    editingId = id;
+    $('#m-task').textContent = t.text;
+    $('#m-start').value = t.start || '';
+    $('#m-end').value = t.end || '';
+    overlay.classList.add('show');
+  }
+  function closeEdit() { overlay.classList.remove('show'); editingId = null; }
+
+  $('#m-cancel').addEventListener('click', closeEdit);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeEdit(); });
+  $('#m-clear').addEventListener('click', () => {
+    $('#m-start').value = ''; $('#m-end').value = '';
+  });
+  $('#m-save').addEventListener('click', () => {
+    const t = tasks.find(x => x.id === editingId);
+    if (t) { t.start = $('#m-start').value || ''; t.end = $('#m-end').value || ''; save(); render(); }
+    closeEdit();
+  });
+
+  // 長押し検出（タッチ・マウス両対応）
+  function attachLongPress(container, selector) {
+    function start(e) {
+      const el = e.target.closest(selector);
+      if (!el) return;
+      // チェック/削除ボタン上では発動しない
+      if (e.target.closest('.check') || e.target.closest('.del')) return;
+      const id = Number(el.dataset.id);
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        if (navigator.vibrate) navigator.vibrate(15);
+        openEdit(id);
+      }, 500);
+    }
+    function cancel() { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } }
+    container.addEventListener('touchstart', start, { passive: true });
+    container.addEventListener('touchend', cancel);
+    container.addEventListener('touchmove', cancel);
+    container.addEventListener('mousedown', start);
+    container.addEventListener('mouseup', cancel);
+    container.addEventListener('mouseleave', cancel);
+  }
+  attachLongPress(list, '.task');
+  attachLongPress(timeline, '.ev, .task');
+
+  setInterval(render, 30000);
+
+  load();
+
+  // ---- PWA: Service Worker を登録（オフライン対応） ----
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js').catch(err => {
+        console.warn('Service Worker の登録に失敗しました', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
