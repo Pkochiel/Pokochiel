@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>恋愛☆大作戦！ — となりの席は天敵だった件</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+
+:root {
+  --sky:#e8f4ff; --sky2:#cce8ff; --cream:#fffbf0; --white:#fff;
+  --yellow:#ffe066; --orange:#ff9c3a; --pink:#ff6b9d; --pink2:#ffb3d1;
+  --red:#ff4466; --blue:#3a8eff; --blue2:#a8d4ff; --green:#4ecb71;
+  --purple:#9b6bff; --text:#2a2040; --text2:#6b5f80;
+  --border:rgba(42,32,64,0.12);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--sky); color:var(--text); font-family:'Noto Sans JP',sans-serif; min-height:100vh; overflow:hidden; user-select:none; }
+.screen { display:none; width:100%; height:100vh; }
+.screen.active { display:flex; }
+
+/* ===== TITLE ===== */
+#title-screen { flex-direction:column; align-items:center; justify-content:center;
+  background:linear-gradient(160deg,#fff5e0 0%,#ffe8f0 40%,#e8f0ff 100%); position:relative; overflow:hidden; }
+.blob { position:absolute; border-radius:50%; opacity:0.18; pointer-events:none;
+  animation:float-blob var(--dur,8s) ease-in-out infinite var(--del,0s) alternate; }
+@keyframes float-blob { from{transform:translateY(0) scale(1)} to{transform:translateY(-20px) scale(1.06)} }
+.speed-lines { position:absolute; inset:0; pointer-events:none;
+  background:repeating-conic-gradient(from 0deg at 50% 110%, rgba(255,180,50,0.07) 0deg 2deg, transparent 2deg 8deg); }
+.title-inner { position:relative; text-align:center; padding:0 24px; z-index:2; }
+.title-badge { display:inline-block; background:var(--yellow); color:var(--text); font-size:11px; font-weight:700;
+  letter-spacing:0.12em; padding:4px 16px; border-radius:20px; margin-bottom:16px; border:2px solid var(--text); transform:rotate(-1.5deg); }
+.title-main { font-weight:900; font-size:clamp(22px,5.5vw,38px); line-height:1.3; color:var(--text);
+  text-shadow:3px 3px 0 var(--pink2),6px 6px 0 rgba(42,32,64,0.08); margin-bottom:4px; }
+.title-sub { font-size:11px; color:var(--text2); letter-spacing:0.08em; margin-bottom:10px; }
+.title-catch { display:inline-block; background:var(--pink); color:#fff; font-size:12px; font-weight:700;
+  padding:5px 20px; border-radius:4px; margin-bottom:36px; transform:rotate(0.5deg); }
+.title-menu { display:flex; flex-direction:column; gap:10px; align-items:center; }
+.t-btn { background:var(--white); border:2.5px solid var(--text); color:var(--text); font-family:inherit; font-weight:700;
+  font-size:15px; letter-spacing:0.1em; padding:13px 0; width:230px; cursor:pointer; border-radius:8px;
+  transition:all 0.15s; box-shadow:3px 3px 0 var(--text); }
+.t-btn:hover { transform:translate(-2px,-2px); box-shadow:5px 5px 0 var(--text); }
+.t-btn:active { transform:translate(1px,1px); box-shadow:1px 1px 0 var(--text); }
+.t-btn.primary { background:var(--yellow); }
+.t-btn.pink { background:var(--pink2); }
+.title-mascot { position:absolute; right:6%; bottom:4%; width:150px; opacity:0.92; z-index:1; }
+
+/* ===== GAME ===== */
+#game-screen { flex-direction:column; background:var(--sky); }
+.status-bar { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--white);
+  border-bottom:2px solid var(--text); flex-shrink:0; }
+.status-day { font-weight:900; font-size:12px; color:var(--text); white-space:nowrap;
+  background:var(--yellow); padding:3px 10px; border-radius:20px; border:1.5px solid var(--text); }
+.params { display:flex; gap:5px; flex:1; }
+.param { display:flex; align-items:center; gap:3px; background:var(--sky); border:1.5px solid var(--border);
+  border-radius:20px; padding:2px 7px; font-size:10px; font-weight:700; flex:1; }
+.p-icon { font-size:12px; }
+.p-val { color:var(--text2); font-size:10px; min-width:20px; }
+.param-bar-wrap { flex:1; height:4px; background:rgba(0,0,0,0.08); border-radius:4px; overflow:hidden; }
+.param-bar { height:100%; border-radius:4px; transition:width 0.5s ease; }
+.param-bar.love{background:var(--pink)} .param-bar.friend{background:var(--blue)}
+.param-bar.culture{background:var(--purple)} .param-bar.sport{background:var(--green)}
+.status-cal-btn { background:var(--sky2); border:1.5px solid var(--text); border-radius:8px; width:32px; height:32px;
+  font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; flex-shrink:0; }
+.status-cal-btn:hover { background:var(--yellow); transform:scale(1.08); }
+
+.scene-area { flex:1; position:relative; overflow:hidden; }
+.scene-bg { position:absolute; inset:0; transition:opacity 0.5s; }
+.bg-classroom { background:linear-gradient(180deg,#d4eeff 0%,#b8dcff 15%,#e8f4e0 15%,#c8e4c0 35%,#f5f0e8 35%,#ede8dc 100%); }
+.bg-rooftop { background:linear-gradient(180deg,#87ceeb 0%,#a8e4ff 30%,#d4f0a8 30%,#b8e890 50%,#c8d4e8 50%,#b0bcd8 100%); }
+.bg-hallway { background:linear-gradient(180deg,#fff8e8 0%,#f0e8d0 40%,#d8ceba 40%,#c8bfaa 100%); }
+.bg-sunset { background:linear-gradient(180deg,#ffd9a0 0%,#ffb088 25%,#ff8c7a 45%,#e0708a 65%,#a06090 100%); }
+.bg-library { background:linear-gradient(180deg,#e8dcc8 0%,#d4c4a8 25%,#c0a888 25%,#b09878 55%,#d8c8a8 55%,#c8b890 100%); }
+.bg-shop { background:linear-gradient(180deg,#ffe8c0 0%,#ffd098 30%,#e8a868 30%,#d09050 60%,#c08850 60%,#b07840 100%); }
+
+.char-layer { position:absolute; bottom:38%; left:0; right:0; display:flex; align-items:flex-end;
+  justify-content:center; gap:16px; pointer-events:none; }
+.char-wrap { position:relative; transition:opacity 0.4s,transform 0.4s; flex-shrink:0; }
+.char-wrap.dim { opacity:0.55; transform:scale(0.92); }
+
+.manga-effect { position:absolute; inset:0; pointer-events:none; opacity:0; display:flex; align-items:center;
+  justify-content:center; background:rgba(255,255,255,0.55); transition:opacity 0.3s; z-index:10; }
+.manga-effect.show { opacity:1; }
+.manga-effect-text { font-weight:900; font-size:46px; color:var(--red);
+  text-shadow:4px 4px 0 #ff99aa,-2px -2px 0 #fff; transform:rotate(-8deg); }
+
+.textbox { position:absolute; bottom:0; left:0; right:0; min-height:36%; background:var(--white);
+  border-top:2.5px solid var(--text); padding:14px 18px 18px; cursor:pointer; }
+.speaker-tag { display:inline-flex; align-items:center; gap:6px; background:var(--pink); color:#fff; font-weight:900;
+  font-size:12px; padding:3px 14px 3px 8px; border-radius:4px; margin-bottom:10px; border:1.5px solid var(--text); min-height:24px; }
+.speaker-tag.blue{background:var(--blue)} .speaker-tag.purple{background:var(--purple)}
+.speaker-tag.green{background:var(--green)} .speaker-tag.narr{background:var(--text2)}
+.speaker-tag.hidden { opacity:0; }
+.speaker-icon { font-size:14px; }
+.dialogue-text { font-size:15px; line-height:1.95; color:var(--text); }
+.text-cursor { display:inline-block; width:0; height:0; border-style:solid; border-width:7px 0 7px 10px;
+  border-color:transparent transparent transparent var(--pink); margin-left:6px; vertical-align:middle;
+  opacity:0; transition:opacity 0.2s; animation:cur-pulse 0.8s ease-in-out infinite; }
+.text-cursor.visible { opacity:1; }
+@keyframes cur-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.skip-hint { position:absolute; bottom:6px; right:14px; font-size:10px; color:var(--text2); }
+
+.choice-panel { position:absolute; bottom:0; left:0; right:0; padding:14px 14px 20px; background:var(--cream);
+  border-top:2.5px solid var(--text); display:none; flex-direction:column; gap:8px; }
+.choice-panel.visible { display:flex; }
+.choice-label { font-size:11px; font-weight:700; color:var(--text2); letter-spacing:0.15em; margin-bottom:2px; }
+.choice-btn { background:var(--white); border:2px solid var(--text); color:var(--text); font-family:inherit; font-weight:700;
+  font-size:13px; line-height:1.65; padding:11px 16px; text-align:left; cursor:pointer; border-radius:8px;
+  transition:all 0.15s; box-shadow:2px 2px 0 var(--text); display:flex; align-items:center; gap:10px; }
+.choice-btn::before { content:'▶'; font-size:10px; color:var(--pink); flex-shrink:0; }
+.choice-btn:hover { background:var(--yellow); transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--text); }
+.choice-btn:active { transform:translate(1px,1px); box-shadow:0 0 0 var(--text); }
+
+/* ===== CALENDAR ===== */
+#calendar-screen { flex-direction:column; align-items:center;
+  background:linear-gradient(160deg,#fff5e0 0%,#ffe8f0 60%,#e8f0ff 100%); overflow-y:auto; padding:16px 14px 28px; }
+.cal-header-row { display:flex; align-items:center; justify-content:space-between; width:100%; max-width:420px; margin-bottom:12px; }
+.cal-title { font-weight:900; font-size:20px; }
+.cal-month-badge { background:var(--yellow); border:2px solid var(--text); border-radius:20px; font-weight:700;
+  font-size:13px; padding:3px 14px; box-shadow:2px 2px 0 var(--text); }
+.cal-week-hdr { display:grid; grid-template-columns:repeat(7,1fr); width:100%; max-width:420px; margin-bottom:3px; }
+.cal-wday { text-align:center; font-size:11px; font-weight:700; padding:3px 0; color:var(--text2); }
+.cal-wday:first-child{color:var(--red)} .cal-wday:last-child{color:var(--blue)}
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); width:100%; max-width:420px; gap:3px; margin-bottom:18px; }
+.cal-day { aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  font-size:13px; font-weight:700; border:1.5px solid transparent; border-radius:8px; cursor:pointer;
+  transition:all 0.15s; background:rgba(255,255,255,0.5); position:relative; }
+.cal-day:hover { border-color:var(--text); background:var(--yellow); transform:scale(1.06); }
+.cal-day.today { background:var(--pink); color:#fff; border-color:var(--text); box-shadow:2px 2px 0 var(--text); }
+.cal-day.past { color:var(--text2); background:transparent; opacity:0.45; }
+.cal-day.has-event::after { content:'★'; position:absolute; bottom:1px; font-size:8px; color:var(--orange); }
+.cal-day.past.has-event::after { color:var(--text2); }
+.action-title { width:100%; max-width:420px; font-weight:900; font-size:14px; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+.action-title::after { content:''; flex:1; height:2px; background:var(--text); opacity:0.15; }
+.action-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; max-width:420px; margin-bottom:16px; }
+.action-card { background:var(--white); border:2px solid var(--text); border-radius:12px; padding:14px 12px;
+  cursor:pointer; transition:all 0.15s; box-shadow:3px 3px 0 var(--text); position:relative; overflow:hidden; }
+.action-card::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; }
+.action-card.love::before{background:var(--pink)} .action-card.friend::before{background:var(--blue)}
+.action-card.culture::before{background:var(--purple)} .action-card.sport::before{background:var(--green)}
+.action-card:hover { transform:translate(-2px,-2px); box-shadow:5px 5px 0 var(--text); }
+.action-card:active { transform:translate(1px,1px); box-shadow:0 0 0 var(--text); }
+.a-icon { font-size:26px; margin-bottom:6px; }
+.a-name { font-size:13px; font-weight:700; margin-bottom:3px; }
+.a-desc { font-size:10px; color:var(--text2); line-height:1.5; }
+.a-gain { font-size:11px; font-weight:700; margin-top:6px; }
+.a-gain.love{color:var(--pink)} .a-gain.friend{color:var(--blue)}
+.a-gain.culture{color:var(--purple)} .a-gain.sport{color:var(--green)}
+.cal-back-btn { background:var(--white); border:2px solid var(--text); color:var(--text); font-family:inherit;
+  font-weight:700; font-size:13px; padding:10px 32px; border-radius:8px; cursor:pointer;
+  box-shadow:2px 2px 0 var(--text); transition:all 0.15s; }
+.cal-back-btn:hover { background:var(--sky2); transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--text); }
+
+/* affection mini panel */
+.affection-panel { width:100%; max-width:420px; background:var(--white); border:2px solid var(--text);
+  border-radius:12px; padding:12px 14px; margin-bottom:16px; box-shadow:3px 3px 0 var(--text); }
+.aff-title { font-weight:900; font-size:13px; margin-bottom:8px; }
+.aff-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px; font-weight:700; }
+.aff-name { width:80px; }
+.aff-bar-wrap { flex:1; height:8px; background:rgba(0,0,0,0.08); border-radius:6px; overflow:hidden; }
+.aff-bar { height:100%; background:var(--pink); border-radius:6px; transition:width 0.5s; }
+.aff-lv { font-size:10px; color:var(--text2); width:80px; text-align:right; }
+
+/* ===== OVERLAY / TOAST ===== */
+.fade-overlay { position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity 0.3s; z-index:200; }
+.fade-overlay.active { opacity:1; pointer-events:all; }
+.toast { position:fixed; top:16px; left:50%; transform:translateX(-50%) translateY(-60px); background:var(--text);
+  color:#fff; font-size:12px; font-weight:700; padding:8px 20px; border-radius:20px;
+  transition:transform 0.35s cubic-bezier(.34,1.56,.64,1); z-index:300; white-space:nowrap; }
+.toast.show { transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="fade-overlay" id="fade-overlay"></div>
+<div class="toast" id="toast"></div>
+
+<!-- TITLE -->
+<div class="screen active" id="title-screen">
+  <div class="speed-lines"></div>
+  <div class="blob" style="width:300px;height:300px;background:var(--yellow);top:-80px;left:-80px;--dur:7s"></div>
+  <div class="blob" style="width:200px;height:200px;background:var(--pink2);bottom:-40px;right:-40px;--dur:9s;--del:-3s"></div>
+  <div class="blob" style="width:150px;height:150px;background:var(--blue2);top:40%;left:10%;--dur:11s;--del:-5s"></div>
+  <div class="title-inner">
+    <div class="title-badge">💘 ラブコメ×シミュレーション 💘</div>
+    <h1 class="title-main">恋愛☆大作戦！<br><span style="font-size:0.62em;color:var(--text2)">〜となりの席は天敵だった件〜</span></h1>
+    <div class="title-sub">LOVE TACTICS ☆ THE RIVAL NEXT DOOR</div>
+    <div class="title-catch">「なぜかいつも巻き込まれる、それが青春ってやつだ」</div>
+    <div class="title-menu">
+      <button class="t-btn primary" onclick="startGame()">🎮 は じ め る</button>
+      <button class="t-btn pink" onclick="loadGame()">📂 つ づ き か ら</button>
+      <button class="t-btn" onclick="openCalendar()">📅 カ レ ン ダ ー</button>
+    </div>
+  </div>
+  <div class="title-mascot" aria-hidden="true">
+    <svg viewBox="0 0 120 200" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="60" cy="54" rx="32" ry="36" fill="#e09b3a"/>
+      <path d="M86 44 Q116 50 112 92 Q108 120 90 140 Q102 112 98 86 Q94 58 82 52Z" fill="#e09b3a"/>
+      <path d="M90 56 Q108 66 104 94" stroke="#c9821f" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+      <ellipse cx="60" cy="58" rx="26" ry="28" fill="#ffd5b8"/>
+      <ellipse cx="38" cy="68" rx="8" ry="5" fill="rgba(255,120,110,0.3)"/>
+      <ellipse cx="82" cy="68" rx="8" ry="5" fill="rgba(255,120,110,0.3)"/>
+      <ellipse cx="48" cy="56" rx="9" ry="10" fill="#2a1408"/>
+      <ellipse cx="72" cy="56" rx="9" ry="10" fill="#2a1408"/>
+      <ellipse cx="48" cy="56" rx="6" ry="7" fill="#9a5a2a"/>
+      <ellipse cx="72" cy="56" rx="6" ry="7" fill="#9a5a2a"/>
+      <circle cx="45" cy="51" r="2.5" fill="white"/><circle cx="69" cy="51" r="2.5" fill="white"/>
+      <path d="M40 44 Q48 41 56 44" stroke="#c9821f" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M64 44 Q72 41 80 44" stroke="#c9821f" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M34 44 Q36 24 60 22 Q84 24 86 44" fill="#e09b3a"/>
+      <path d="M50 24 Q60 20 70 24 Q60 30 50 24Z" fill="#c9821f"/>
+      <path d="M50 70 Q60 80 70 70" stroke="#c06070" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <rect x="52" y="84" width="16" height="12" rx="4" fill="#ffd5b8"/>
+      <path d="M26 96 L60 108 L94 96 L98 140 L22 140 Z" fill="#f4f1ea"/>
+      <path d="M26 96 L60 108 L94 96" stroke="#1e3a8a" stroke-width="2" fill="none"/>
+      <rect x="22" y="128" width="76" height="7" fill="#1e3a8a"/>
+      <path d="M20 140 Q16 170 14 196 L106 196 Q104 170 100 140 Z" fill="#e8e4da"/>
+      <text x="80" y="124" font-size="13" font-weight="900" fill="#c0392b" transform="rotate(-8 80 124)">7</text>
+      <circle cx="36" cy="150" r="11" fill="white" stroke="#d0d0c8" stroke-width="1"/>
+      <path d="M30 144 Q36 150 30 156 M42 144 Q36 150 42 156" stroke="#c0392b" stroke-width="1" fill="none"/>
+    </svg>
+  </div>
+</div>
+
+<!-- GAME -->
+<div class="screen" id="game-screen">
+  <div class="status-bar">
+    <div class="status-day" id="day-label">4月 1週</div>
+    <div class="params">
+      <div class="param"><span class="p-icon">💗</span><div class="param-bar-wrap"><div class="param-bar love" id="bar-love" style="width:10%"></div></div><span class="p-val" id="val-love">10</span></div>
+      <div class="param"><span class="p-icon">📚</span><div class="param-bar-wrap"><div class="param-bar culture" id="bar-culture" style="width:15%"></div></div><span class="p-val" id="val-culture">15</span></div>
+      <div class="param"><span class="p-icon">⚡</span><div class="param-bar-wrap"><div class="param-bar sport" id="bar-sport" style="width:30%"></div></div><span class="p-val" id="val-sport">30</span></div>
+      <div class="param"><span class="p-icon">🤝</span><div class="param-bar-wrap"><div class="param-bar friend" id="bar-friend" style="width:20%"></div></div><span class="p-val" id="val-friend">20</span></div>
+    </div>
+    <button class="status-cal-btn" onclick="openCalendar()">📅</button>
+  </div>
+  <div class="scene-area" id="scene-area">
+    <div class="scene-bg bg-classroom" id="scene-bg"></div>
+    <div class="manga-effect" id="manga-effect"><div class="manga-effect-text" id="manga-effect-text">！？</div></div>
+    <div class="char-layer" id="char-layer"></div>
+    <div class="textbox" id="textbox" onclick="advanceScript()">
+      <div class="speaker-tag hidden" id="speaker-tag"><span class="speaker-icon" id="speaker-icon"></span><span id="speaker-name"></span></div>
+      <div class="dialogue-text" id="dialogue-text"><span id="text-content"></span><span class="text-cursor" id="text-cursor"></span></div>
+      <div class="skip-hint">タップで次へ ▶</div>
+    </div>
+    <div class="choice-panel" id="choice-panel">
+      <div class="choice-label">どうする？</div>
+      <div id="choices-container"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CALENDAR -->
+<div class="screen" id="calendar-screen">
+  <div class="cal-header-row"><div class="cal-title">📅 スケジュール</div><div class="cal-month-badge" id="cal-month">4月</div></div>
+  <div class="affection-panel">
+    <div class="aff-title">💗 好感度</div>
+    <div class="aff-row"><span class="aff-name">神崎 彩花</span><div class="aff-bar-wrap"><div class="aff-bar" id="aff-ayaka" style="width:10%"></div></div><span class="aff-lv" id="afflv-ayaka">他人</span></div>
+    <div class="aff-row"><span class="aff-name">壇ノ浦 凛桜</span><div class="aff-bar-wrap"><div class="aff-bar" id="aff-rio" style="width:0%"></div></div><span class="aff-lv" id="afflv-rio">他人</span></div>
+  </div>
+  <div class="cal-week-hdr">
+    <div class="cal-wday">日</div><div class="cal-wday">月</div><div class="cal-wday">火</div><div class="cal-wday">水</div><div class="cal-wday">木</div><div class="cal-wday">金</div><div class="cal-wday">土</div>
+  </div>
+  <div class="cal-grid" id="cal-grid"></div>
+  <div class="action-title">今日の行動を選ぼう</div>
+  <div class="action-grid">
+    <div class="action-card love" onclick="doAction('love')"><div class="a-icon">🌸</div><div class="a-name">誰かを誘う</div><div class="a-desc">勇気を出して！断られたら赤っ恥だけど…</div><div class="a-gain love">💗好感度 ＋＋＋</div></div>
+    <div class="action-card friend" onclick="doAction('friend')"><div class="a-icon">🎮</div><div class="a-name">みんなで遊ぶ</div><div class="a-desc">気づくと全員集合してカオスになる件</div><div class="a-gain friend">🤝友情 ＋＋</div></div>
+    <div class="action-card culture" onclick="doAction('culture')"><div class="a-icon">📚</div><div class="a-name">図書館で勉強</div><div class="a-desc">なぜか彩花も来て全然静かじゃない</div><div class="a-gain culture">📚文化力 ＋＋</div></div>
+    <div class="action-card sport" onclick="doAction('sport')"><div class="a-icon">🔥</div><div class="a-name">部活で根性</div><div class="a-desc">監督の「もう一本！」が止まらない</div><div class="a-gain sport">⚡体力 ＋＋</div></div>
+  </div>
+  <button class="cal-back-btn" onclick="backToGame()">← もどる</button>
+</div>
+
+<script>
+// =========================================================
+//   GAME STATE  (好感度はキャラ別／フラグ管理つき)
+// =========================================================
+const DEFAULT_STATE = {
+  month:4, week:1, day:1,
+  params:{ culture:15, sport:30, friend:20 },
+  affection:{ ayaka:10, rio:0 },
+  flags:{},
+  focusHeroine:'ayaka',
+  scriptIndex:0,
+  currentBg:'classroom',
+};
+let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+let isTyping = false;
+
+// =========================================================
+//   CHARACTERS
+// =========================================================
+const CHARS = {
+  ayaka: { name:'神崎 彩花', color:'pink',   icon:'😤', svgFn:(e)=>charAyaka(e) },
+  kenji: { name:'田中 健二', color:'blue',   icon:'😄', svgFn:(e)=>charKenji(e) },
+  rio:   { name:'壇ノ浦 凛桜', color:'purple', icon:'🌟', svgFn:(e)=>charRio(e) },
+};
+
+function charAyaka(expr){
+  const face='#ffd5b8', eye='#9a5a2a';
+  const HAIR='#e09b3a', HAIR2='#c9821f';
+  const mouths={normal:'M52 72 Q60 77 68 72',angry:'M50 76 Q60 70 70 76',shy:'M53 73 Q60 77 67 73',surprised:null,smile:'M48 70 Q60 82 72 70'};
+  const brows={normal:['M40 44 Q48 41 56 44','M64 44 Q72 41 80 44'],angry:['M38 46 Q48 42 56 46','M64 46 Q72 42 82 46'],shy:['M42 45 Q48 43 55 45','M65 45 Q72 43 78 45'],surprised:['M40 42 Q48 38 56 42','M64 42 Q72 38 80 42'],smile:['M40 44 Q48 42 56 44','M64 44 Q72 42 80 44']};
+  const e=expr||'normal'; const mp=mouths[e]; const [lb,rb]=brows[e]||brows.normal;
+  const blush=(e==='shy'||e==='smile')?'0.45':'0.25';
+  return `<svg viewBox="0 0 120 220" width="110" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="60" cy="64" rx="33" ry="40" fill="${HAIR}"/>
+  <path d="M88 50 Q116 56 112 96 Q108 128 92 150 Q104 120 100 92 Q96 64 84 58Z" fill="${HAIR}"/>
+  <path d="M92 60 Q112 70 108 100" stroke="${HAIR2}" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+  <ellipse cx="60" cy="70" rx="27" ry="30" fill="${face}"/>
+  <ellipse cx="36" cy="80" rx="9" ry="5.5" fill="rgba(255,120,110,${blush})"/>
+  <ellipse cx="84" cy="80" rx="9" ry="5.5" fill="rgba(255,120,110,${blush})"/>
+  <ellipse cx="47" cy="66" rx="9.5" ry="11" fill="#2a1408"/><ellipse cx="73" cy="66" rx="9.5" ry="11" fill="#2a1408"/>
+  <ellipse cx="47" cy="67" rx="6.5" ry="8" fill="${eye}"/><ellipse cx="73" cy="67" rx="6.5" ry="8" fill="${eye}"/>
+  <ellipse cx="47" cy="66" rx="3.5" ry="4" fill="#d4a05a"/><ellipse cx="73" cy="66" rx="3.5" ry="4" fill="#d4a05a"/>
+  <circle cx="44" cy="61" r="3" fill="white"/><circle cx="70" cy="61" r="3" fill="white"/>
+  <path d="${lb}" stroke="${HAIR2}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="${rb}" stroke="${HAIR2}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M33 56 Q35 32 60 28 Q85 32 87 56" fill="${HAIR}"/>
+  <path d="M33 56 Q28 66 32 74" fill="${HAIR}"/><path d="M87 56 Q92 66 88 74" fill="${HAIR}"/>
+  <path d="M50 30 Q60 26 70 30 Q60 38 50 30Z" fill="${HAIR2}"/>
+  ${mp?`<path d="${mp}" stroke="#c06070" stroke-width="2.2" fill="none" stroke-linecap="round"/>`:`<ellipse cx="60" cy="75" rx="6" ry="5" fill="#c06070"/><ellipse cx="60" cy="74" rx="5" ry="3" fill="${face}"/>`}
+  <rect x="51" y="98" width="18" height="14" rx="5" fill="${face}"/>
+  <path d="M22 112 L60 124 L98 112 L104 172 L16 172 Z" fill="#f4f1ea"/>
+  <path d="M22 112 L60 124 L98 112" stroke="#1e3a8a" stroke-width="2.5" fill="none"/>
+  <path d="M60 124 L60 172" stroke="#1e3a8a" stroke-width="2" fill="none" opacity="0.5"/>
+  <circle cx="44" cy="138" r="2" fill="#1e3a8a"/><circle cx="44" cy="150" r="2" fill="#1e3a8a"/>
+  <rect x="16" y="156" width="88" height="8" fill="#1e3a8a"/>
+  <path d="M14 172 Q12 200 12 218 L108 218 Q108 200 106 172Z" fill="#e8e4da"/>
+  <text x="78" y="146" font-size="11" font-weight="900" fill="#c0392b" transform="rotate(-8 78 146)">7</text>
+  ${e==='angry'?'<g transform="translate(86,28)"><path d="M0 6 Q5 0 10 6 Q5 12 0 6Z" fill="#ff5533"/><path d="M2 2 L8 10 M8 2 L2 10" stroke="white" stroke-width="1.5" stroke-linecap="round"/></g>':''}
+  ${e==='shy'?'<text x="88" y="48" font-size="12">💦</text>':''}
+  ${e==='smile'?'<text x="20" y="48" font-size="11">⚾</text>':''}
+</svg>`;
+}
+function charKenji(expr){
+  const e=expr||'normal';
+  const mouths={normal:'M50 72 Q60 78 70 72',laugh:'M48 70 Q60 82 72 70',shocked:'M56 70 Q60 78 64 70'};
+  const m=mouths[e]||mouths.normal;
+  return `<svg viewBox="0 0 110 220" width="100" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="55" cy="60" rx="30" ry="34" fill="#1a1a2e"/>
+  <path d="M30 52 Q20 30 38 26 Q42 48 30 52Z" fill="#1a1a2e"/>
+  <path d="M55 28 Q50 8 60 6 Q65 26 55 28Z" fill="#1a1a2e"/>
+  <path d="M76 50 Q90 28 76 22 Q68 44 76 50Z" fill="#1a1a2e"/>
+  <ellipse cx="55" cy="68" rx="26" ry="28" fill="#fde0c0"/>
+  ${e==='laugh'?`<path d="M40 62 Q48 57 56 62" stroke="#1a0a20" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M60 62 Q68 57 76 62" stroke="#1a0a20" stroke-width="2.5" fill="none" stroke-linecap="round"/>`:`<ellipse cx="47" cy="64" rx="8" ry="9" fill="#1a1a2e"/><ellipse cx="63" cy="64" rx="8" ry="9" fill="#1a1a2e"/><ellipse cx="47" cy="64" rx="5" ry="6" fill="#4060d0"/><ellipse cx="63" cy="64" rx="5" ry="6" fill="#4060d0"/><circle cx="44" cy="60" r="2.5" fill="white"/><circle cx="60" cy="60" r="2.5" fill="white"/>`}
+  <path d="M38 52 Q46 49 54 52" stroke="#1a1a2e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M56 52 Q64 49 72 52" stroke="#1a1a2e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="${m}" stroke="#b06050" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  ${e==='laugh'?'<ellipse cx="55" cy="76" rx="6" ry="4" fill="#c07060"/>':''}
+  <rect x="47" y="94" width="16" height="12" rx="4" fill="#fde0c0"/>
+  <path d="M18 106 L55 118 L92 106 L96 168 L14 168Z" fill="#1a1a3e"/>
+  <path d="M34 106 L55 118 L76 106" stroke="#3a3a6e" stroke-width="2" fill="none"/>
+  <path d="M12 168 L14 218 L36 218 L40 168Z" fill="#1a1a3e"/>
+  <path d="M98 168 L96 218 L74 218 L70 168Z" fill="#1a1a3e"/>
+  ${e==='shocked'?'<text x="80" y="50" font-size="16">！！</text>':''}
+</svg>`;
+}
+function charRio(expr){
+  const e=expr||'normal';
+  const mouth = e==='smile' ? 'M48 76 Q55 83 62 76' : 'M49 77 Q55 82 61 77';
+  return `<svg viewBox="0 0 110 220" width="100" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="55" cy="62" rx="31" ry="40" fill="#9090c0"/>
+  <path d="M26 80 Q15 140 24 200" stroke="#9090c0" stroke-width="18" fill="none" stroke-linecap="round"/>
+  <path d="M84 80 Q95 140 86 200" stroke="#9090c0" stroke-width="18" fill="none" stroke-linecap="round"/>
+  <path d="M40 120 Q36 160 34 200" stroke="#9090c0" stroke-width="14" fill="none" stroke-linecap="round"/>
+  <ellipse cx="55" cy="68" rx="26" ry="29" fill="#f5e8ff"/>
+  <ellipse cx="46" cy="66" rx="9" ry="10" fill="#1a0a30"/><ellipse cx="64" cy="66" rx="9" ry="10" fill="#1a0a30"/>
+  <ellipse cx="46" cy="66" rx="6" ry="7" fill="#7040d0"/><ellipse cx="64" cy="66" rx="6" ry="7" fill="#e0b030"/>
+  <circle cx="42" cy="61" r="2.5" fill="white"/><circle cx="60" cy="61" r="2.5" fill="white"/>
+  <path d="M38 54 Q46 51 54 54" stroke="#7060a0" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M56 54 Q64 51 72 54" stroke="#7060a0" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M30 58 Q32 32 55 28 Q78 32 80 58" fill="#9090c0"/>
+  <path d="${mouth}" stroke="#c090d0" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <rect x="47" y="96" width="16" height="12" rx="4" fill="#f5e8ff"/>
+  <path d="M18 108 L55 120 L92 108 L96 168 L14 168Z" fill="#4a3080"/>
+  <path d="M36 108 L55 120 L55 148 L46 132 L36 108Z" fill="#c8b8e8"/>
+  <path d="M74 108 L55 120 L55 148 L64 132 L74 108Z" fill="#c8b8e8"/>
+  <path d="M50 118 L55 126 L60 118 Q55 123 50 118Z" fill="#e0b030"/>
+  <path d="M12 168 Q10 196 8 218 L102 218 Q100 196 98 168Z" fill="#4a3080"/>
+  <text x="75" y="82" font-size="10" fill="#e0b030">✦</text>
+</svg>`;
+}
+
+// =========================================================
+//   SCRIPT DATA — 第1話＆第2話
+// =========================================================
+const scripts = [
+  // ---- 第1話：席替えと天敵 ----
+  { type:'narration', bg:'classroom', text:'四月。新学期、二年A組。席替えの結果に、俺は頭を抱えていた。' },
+  { type:'narration', bg:'classroom', text:'よりによって——隣が、神崎彩花。小学校からの「因縁の相手」だ。' },
+  { type:'narration', bg:'classroom', text:'よりによって——隣が、神崎彩花。小学校からの腐れ縁で、野球部のエースだ。' },
+  { type:'dialogue', speaker:'ayaka', expr:'smile', text:'うわっ、隣あんたじゃーん！　よろしくね、相棒！　……って、なんでそんな微妙な顔してんの？' },
+  { type:'narration', bg:'classroom', text:'（朝から元気すぎる。こっちの体力がもたない。）' },
+  { type:'choice', choices:[
+    { text:'「腐れ縁の隣とか、前途多難だな」', effect:{ ayaka:+6, friend:+3 }, next:5 },
+    { text:'「まあ、よろしく。今年もよろしくな」', effect:{ ayaka:+12 }, flag:'ayaka_friendly', next:7 },
+    { text:'「お前、また背伸びた？」', effect:{ ayaka:+3, sport:+2 }, next:9 },
+  ]},
+  { type:'dialogue', speaker:'ayaka', expr:'smile', text:'前途多難って、失礼なー！　あたしと一緒で楽しいに決まってるっしょ！', gotoAfter:11 },
+  { type:'narration', bg:'classroom', text:'（この自信。昔から、まぶしいくらいまっすぐだ。）', gotoAfter:11 },
+  { type:'dialogue', speaker:'ayaka', expr:'shy', text:'……っ。「今年も」って……なんか、急に言われると、照れるんですけど。一応、よろしく！', gotoAfter:11 },
+  { type:'narration', bg:'classroom', text:'（こういう時だけ、急に目をそらすんだよな。）', gotoAfter:11 },
+  { type:'dialogue', speaker:'ayaka', expr:'angry', text:'伸びてないし！　……たぶん。って、なんで身長の話なの！', gotoAfter:11 },
+  { type:'narration', bg:'classroom', text:'（こいつのペースだ。昔から、振り回される。）', gotoAfter:11 },
+  // 合流：健二乱入
+  { type:'dialogue', speaker:'kenji', expr:'laugh', text:'うぉぉぉぉ見たぞ今の！！　神崎さんと朝から漫才！？　お前ら相変わらずだな〜！！' },
+  { type:'narration', bg:'classroom', text:'親友・田中健二。朝っぱらからテンションがおかしい。' },
+  { type:'dialogue', speaker:'kenji', expr:'normal', text:'いやでもさ、隣の席って結構デカいぜ。一年あれば……人間関係、変わるって。' },
+  { type:'choice', choices:[
+    { text:'「変わるかよ。あいつは昔からあいつだ」', effect:{ friend:+5 }, next:15 },
+    { text:'「……変わると思うか？」', effect:{ ayaka:+5, friend:+8 }, flag:'wants_change', next:17 },
+  ]},
+  { type:'dialogue', speaker:'kenji', expr:'laugh', text:'はいはい、照れてんのお前もかよ〜！（ニヤニヤ）', gotoAfter:19 },
+  { type:'narration', bg:'classroom', text:'こいつには敵わない。昔から、全部お見通しって顔をする。', gotoAfter:19 },
+  { type:'dialogue', speaker:'kenji', expr:'normal', text:'お、マジな顔。……変えたいなら、まず「知る」ことだ。あいつの好きなもの、言えるか？', gotoAfter:19 },
+  { type:'narration', bg:'classroom', text:'好きなもの。……野球とプリン、と即答できてしまった自分が、少し嫌だった。', gotoAfter:19 },
+  // 放課後の部活：剛速球CG
+  { type:'narration', bg:'sunset', text:'放課後。グラウンドに寄ると、彩花が一人でピッチング練習をしていた。' },
+  { type:'dialogue', speaker:'ayaka', expr:'smile', cg:'cg_ayaka_fastball', text:'お、来たな！　ちょうどいいや——あたしの本気、見てけよ。愛の剛速球、キャッチできる？' },
+  { type:'narration', bg:'sunset', text:'（ネット裏のフェンスが、悲鳴を上げて歪んだ。……キャッチできるわけがない。）', manga:{effect:true,text:'剛速球！！'} },
+  { type:'dialogue', speaker:'ayaka', expr:'smile', text:'あはは、まだまだ本気じゃないんだから！　……ねえ、ちゃんと見てた？' },
+  // 第1話ラスト
+  { type:'narration', bg:'sunset', text:'放課後。誰もいなくなった教室に、夕陽が長い影を落としていた。' },
+  { type:'narration', bg:'sunset', text:'机に、プリンが一つ、置かれていた。付箋つきで。' },
+  { type:'dialogue', speaker:'ayaka', expr:'shy', cg:'cg_prologue', text:'（付箋）「隣の席、よろしくのしるし！　一個だけだからね、特別だぞっ。」' },
+  { type:'narration', bg:'sunset', text:'……こういうところだ。こいつが、ずるいのは。', isEnd:true, chapter:1 },
+
+  // ===== 第2話のインデックス開始（25〜） =====
+  { type:'narration', bg:'hallway', text:'数日後。廊下を歩いていると、見慣れない銀髪の生徒とすれ違った。' },
+  { type:'dialogue', speaker:'rio', expr:'normal', text:'——あなたが、二年A組の「神崎彩花の隣席」。ふふ、間違いない。観察対象、発見。' },
+  { type:'narration', bg:'hallway', text:'（観察対象って何！？）', manga:{effect:true,text:'観察！？'} },
+  { type:'dialogue', speaker:'rio', expr:'smile', text:'申し遅れました。今日転入した壇ノ浦凛桜です。あなたのこと、しばらく観察させてもらいますね♡' },
+  { type:'choice', choices:[
+    { text:'「いや意味わからん。何の観察だよ」', effect:{ rio:+8, friend:+3 }, next:33 },
+    { text:'「……まあ、好きにすれば」', effect:{ rio:+14 }, flag:'rio_allow', next:35 },
+  ]},
+  { type:'dialogue', speaker:'rio', expr:'normal', text:'ふふ、いいリアクション。記録しておきます。……理由は、そのうち。', gotoAfter:37 },
+  { type:'narration', bg:'hallway', text:'(謎すぎる。でも、なぜか嫌な感じはしなかった。)', gotoAfter:37 },
+  { type:'dialogue', speaker:'rio', expr:'smile', text:'あら。意外と余裕。……でも、その余裕がいつまで続くかしら。ふふ。', gotoAfter:37 },
+  { type:'narration', bg:'hallway', text:'(なんだか、嵐の予感がする。)', gotoAfter:37 },
+  // 第2話で彩花と凛桜が遭遇
+  { type:'dialogue', speaker:'ayaka', expr:'angry', text:'……ちょっと。アンタ、その転校生と何コソコソ話してるわけ？' },
+  { type:'dialogue', speaker:'rio', expr:'smile', cg:'cg_first_clash', text:'あら、噂の彩花さん。ふふ、聞いていた通り——彼のこと、ずいぶん気にしてるんですね。' },
+  { type:'narration', bg:'hallway', text:'（空気が、一気に修羅場になった。）', manga:{effect:true,text:'修羅場！！'} },
+  { type:'dialogue', speaker:'ayaka', expr:'surprised', text:'き、気にしてなんかないし！！　な、なんなのこの人！！' },
+  { type:'narration', bg:'sunset', text:'……こうして、俺の平穏な一年は、初日から音を立てて崩れ始めた。' },
+  { type:'narration', bg:'sunset', text:'でも、不思議と——退屈とは、無縁になりそうだった。', isEnd:true, chapter:2 },
+];
+
+// 章ごとの開始インデックス
+const CHAPTER_START = { 1:0, 2:28 };
+
+// =========================================================
+//   TYPEWRITER
+// =========================================================
+let typeTimer=null, curText='', dispIdx=0;
+function typeText(text){
+  const el=document.getElementById('text-content'), cur=document.getElementById('text-cursor');
+  cur.classList.remove('visible'); el.textContent=''; curText=text; dispIdx=0; isTyping=true;
+  clearInterval(typeTimer);
+  typeTimer=setInterval(()=>{
+    if(dispIdx<text.length){ el.textContent=text.slice(0,++dispIdx); }
+    else { clearInterval(typeTimer); isTyping=false; cur.classList.add('visible'); }
+  },38);
+}
+function finishTyping(){
+  clearInterval(typeTimer);
+  document.getElementById('text-content').textContent=curText;
+  document.getElementById('text-cursor').classList.add('visible'); isTyping=false;
+}
+
+// =========================================================
+//   SCRIPT RUNNER
+// =========================================================
+function runScript(i){
+  const s=scripts[i]; if(!s) return;
+  state.scriptIndex=i;
+  hideChoices();
+  document.getElementById('textbox').style.display='block';
+  if(s.bg && s.bg!==state.currentBg){ changeBg(s.bg); state.currentBg=s.bg; }
+  // CG演出：cgが指定されていれば表示、無ければ前のCGを消す
+  if(s.cg){ showCG(s.cg); } else { hideCG(); }
+  if(s.manga && s.manga.effect){ triggerManga(s.manga.text); }
+  updateChars(s);
+  if(s.type==='choice'){ showChoices(s.choices); return; }
+  const tag=document.getElementById('speaker-tag'), sn=document.getElementById('speaker-name'), si=document.getElementById('speaker-icon');
+  if(s.speaker && CHARS[s.speaker]){
+    const ch=CHARS[s.speaker];
+    tag.className=`speaker-tag ${ch.color}`; si.textContent=ch.icon; sn.textContent=ch.name;
+  } else {
+    tag.className='speaker-tag narr';
+    if(s.type==='narration') tag.classList.add('hidden');
+  }
+  typeText(s.text);
+}
+function advanceScript(){
+  if(isTyping){ finishTyping(); return; }
+  const s=scripts[state.scriptIndex]; if(!s) return;
+  if(s.isEnd){
+    autoSave();
+    showToast(`第${s.chapter||'?'}話 おわり！　行動を選ぼう ✨`);
+    setTimeout(openCalendar,1500); return;
+  }
+  const next=s.gotoAfter!==undefined?s.gotoAfter:state.scriptIndex+1;
+  runScript(next);
+}
+
+// =========================================================
+//   ART ASSET LAYER  (画像優先・SVGフォールバック)
+//   絵を assets/ に置くだけで自動で画像に切り替わる。
+//   無ければ既存のSVG/CSSが使われるので1枚ずつ差し替え可能。
+// =========================================================
+const ART = {
+  charaDir:'assets/chara/',
+  bgDir:'assets/bg/',
+  cgDir:'assets/cg/',
+};
+// 立ち絵：画像が読めたら true でキャッシュ。重複ロードを防ぐ
+const _imgCache = {};
+function tryImage(src){
+  return new Promise(res=>{
+    if(src in _imgCache){ res(_imgCache[src]); return; }
+    const img=new Image();
+    img.onload=()=>{ _imgCache[src]=true; res(true); };
+    img.onerror=()=>{ _imgCache[src]=false; res(false); };
+    img.src=src;
+  });
+}
+
+// =========================================================
+//   CHARACTERS RENDER
+// =========================================================
+async function updateChars(s){
+  const layer=document.getElementById('char-layer'); layer.innerHTML='';
+  const main=s.speaker?CHARS[s.speaker]:null;
+  if(s.type==='narration' && !main) return;
+  if(!main) return;
+  const expr=s.expr||'normal';
+  const w=document.createElement('div'); w.className='char-wrap';
+  // まずSVGを即時描画（待たせない）
+  w.innerHTML=main.svgFn(expr);
+  layer.appendChild(w);
+  // 画像があれば差し替え
+  const src=`${ART.charaDir}${s.speaker}_${expr}.png`;
+  const ok=await tryImage(src);
+  if(ok){
+    w.innerHTML=`<img src="${src}" alt="${main.name}" style="height:min(52vh,360px);width:auto;display:block;">`;
+  }
+}
+
+// =========================================================
+//   BACKGROUND  (画像優先・CSSグラデフォールバック)
+// =========================================================
+async function changeBg(name){
+  const bg=document.getElementById('scene-bg');
+  bg.className='scene-bg';
+  const cls={classroom:'bg-classroom',rooftop:'bg-rooftop',hallway:'bg-hallway',sunset:'bg-sunset',library:'bg-library',shop:'bg-shop'};
+  bg.classList.add(cls[name]||'bg-classroom');
+  bg.style.backgroundImage='';
+  const src=`${ART.bgDir}${name}.png`;
+  const ok=await tryImage(src);
+  if(ok){
+    bg.style.backgroundImage=`url(${src})`;
+    bg.style.backgroundSize='cover';
+    bg.style.backgroundPosition='center';
+  }
+}
+
+// =========================================================
+//   EVENT CG  (一枚絵の演出。scriptに cg:'cg_xxx' を付けると発火)
+// =========================================================
+async function showCG(cgName){
+  const src=`${ART.cgDir}${cgName}.png`;
+  const ok=await tryImage(src);
+  if(!ok) return false; // 画像が無いCGはスキップ（演出だけ後で追加できる）
+  let overlay=document.getElementById('cg-overlay');
+  if(!overlay){
+    overlay=document.createElement('div'); overlay.id='cg-overlay';
+    overlay.style.cssText='position:absolute;inset:0;z-index:5;background:#000;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.6s;';
+    document.getElementById('scene-area').appendChild(overlay);
+  }
+  overlay.innerHTML=`<img src="${src}" style="width:100%;height:100%;object-fit:contain;">`;
+  requestAnimationFrame(()=>overlay.style.opacity='1');
+  return true;
+}
+function hideCG(){
+  const overlay=document.getElementById('cg-overlay');
+  if(overlay){ overlay.style.opacity='0'; }
+}
+
+// =========================================================
+//   CHOICES
+// =========================================================
+function showChoices(choices){
+  document.getElementById('textbox').style.display='none';
+  const panel=document.getElementById('choice-panel'), box=document.getElementById('choices-container');
+  box.innerHTML='';
+  choices.forEach(c=>{
+    const b=document.createElement('button'); b.className='choice-btn'; b.textContent=c.text;
+    b.onclick=()=>selectChoice(c); box.appendChild(b);
+  });
+  panel.classList.add('visible');
+}
+function hideChoices(){
+  document.getElementById('choice-panel').classList.remove('visible');
+  document.getElementById('textbox').style.display='block';
+}
+function selectChoice(c){
+  if(c.effect) applyEffect(c.effect);
+  if(c.flag){ state.flags[c.flag]=true; }
+  hideChoices();
+  runScript(c.next!==undefined?c.next:state.scriptIndex+1);
+}
+function applyEffect(eff){
+  const labels=[];
+  Object.entries(eff).forEach(([k,v])=>{
+    if(k in state.affection){
+      state.affection[k]=clamp(state.affection[k]+v);
+      labels.push(`${CHARS[k]?CHARS[k].name.split(' ')[1]||k:k} 💗${v>0?'+':''}${v}`);
+    } else if(k in state.params){
+      state.params[k]=clamp(state.params[k]+v);
+      labels.push(`${pIcon(k)}${v>0?'+':''}${v}`);
+    }
+  });
+  updateBars();
+  if(labels.length) showToast(labels.join('  '));
+}
+function clamp(v){ return Math.max(0,Math.min(100,v)); }
+function pIcon(k){ return {culture:'📚',sport:'⚡',friend:'🤝'}[k]||k; }
+
+// =========================================================
+//   MANGA EFFECT
+// =========================================================
+function triggerManga(t){
+  const el=document.getElementById('manga-effect'), te=document.getElementById('manga-effect-text');
+  te.textContent=t||'！？'; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),900);
+}
+
+// =========================================================
+//   BARS
+// =========================================================
+function updateBars(){
+  // top bar: focus heroine's affection on love
+  const focusAff=state.affection[state.focusHeroine]||0;
+  setBar('love',focusAff);
+  setBar('culture',state.params.culture);
+  setBar('sport',state.params.sport);
+  setBar('friend',state.params.friend);
+  // calendar affection panel
+  setAff('ayaka',state.affection.ayaka);
+  setAff('rio',state.affection.rio);
+}
+function setBar(k,v){
+  const bar=document.getElementById('bar-'+k), val=document.getElementById('val-'+k);
+  if(bar) bar.style.width=v+'%'; if(val) val.textContent=v;
+}
+function setAff(k,v){
+  const bar=document.getElementById('aff-'+k), lv=document.getElementById('afflv-'+k);
+  if(bar) bar.style.width=v+'%';
+  if(lv) lv.textContent=affLabel(v);
+}
+function affLabel(v){
+  if(v>=80) return '相思相愛♡'; if(v>=60) return '両想い手前';
+  if(v>=40) return '気になる'; if(v>=20) return 'クラスメイト'; return '他人';
+}
+
+// =========================================================
+//   CALENDAR & ACTIONS
+// =========================================================
+function buildCalendar(){
+  const grid=document.getElementById('cal-grid'); grid.innerHTML='';
+  document.getElementById('cal-month').textContent=state.month+'月';
+  const events=[3,7,10,14,17,21,24,28];
+  for(let i=0;i<1;i++) grid.appendChild(document.createElement('div'));
+  for(let d=1;d<=31;d++){
+    const el=document.createElement('div'); el.className='cal-day'; el.textContent=d;
+    if(d<state.day) el.classList.add('past');
+    if(d===state.day) el.classList.add('today');
+    if(events.includes(d)) el.classList.add('has-event');
+    el.onclick=()=>showToast(d>=state.day?`${state.month}/${d}　${events.includes(d)?'★イベントあり！':'予定なし'}`:'過去の日付');
+    grid.appendChild(el);
+  }
+  updateBars();
+}
+function doAction(type){
+  const efx={ love:{ [state.focusHeroine]:+20, friend:+5 }, friend:{friend:+15,[state.focusHeroine]:+5}, culture:{culture:+22}, sport:{sport:+22} };
+  const msgs={ love:'勇気を出して誘った！', friend:'みんなでわいわい遊んだ！', culture:'図書館で勉強した（隣に彩花が…）', sport:'部活で根性を見せた！' };
+  applyEffect(efx[type]); showToast(msgs[type]);
+  state.day=Math.min(31,state.day+1);
+  if(state.day%7===0) state.week++;
+  document.getElementById('day-label').textContent=`${state.month}月 ${state.week}週`;
+  buildCalendar(); autoSave();
+  setTimeout(backToGame,1300);
+}
+
+// =========================================================
+//   SAVE / LOAD  (localStorage)
+// =========================================================
+const SAVE_KEY='koi_daisakusen_save_v1';
+function autoSave(){
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }catch(e){}
+}
+function loadGame(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);
+    if(!raw){ showToast('セーブデータがありません'); return; }
+    state=JSON.parse(raw);
+    fadeTransition(()=>{
+      showScreen('game-screen'); changeBg(state.currentBg||'classroom');
+      document.getElementById('day-label').textContent=`${state.month}月 ${state.week}週`;
+      updateBars();
+      runScript(state.scriptIndex||0);
+    });
+    showToast('つづきから再開！');
+  }catch(e){ showToast('読み込みに失敗しました'); }
+}
+
+// =========================================================
+//   SCREEN TRANSITIONS
+// =========================================================
+function fadeTransition(fn){
+  const ov=document.getElementById('fade-overlay'); ov.classList.add('active');
+  setTimeout(()=>{ fn(); setTimeout(()=>ov.classList.remove('active'),80); },300);
+}
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function startGame(){
+  state=JSON.parse(JSON.stringify(DEFAULT_STATE));
+  fadeTransition(()=>{
+    showScreen('game-screen'); changeBg('classroom');
+    document.getElementById('day-label').textContent='4月 1週';
+    updateBars(); runScript(0);
+  });
+}
+function openCalendar(){ fadeTransition(()=>{ buildCalendar(); showScreen('calendar-screen'); }); }
+function backToGame(){
+  fadeTransition(()=>{
+    showScreen('game-screen');
+    // 第1話終了後は第2話へ
+    const s=scripts[state.scriptIndex];
+    if(s && s.isEnd){
+      if(s.chapter===1){ runScript(CHAPTER_START[2]); }
+      else { showToast('現在のシナリオはここまで！　続きは開発中 🛠'); runScript(state.scriptIndex); }
+    }
+  });
+}
+
+// =========================================================
+//   TOAST
+// =========================================================
+function showToast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove('show'),2400);
+}
+</script>
+</body>
+</html>
