@@ -1,0 +1,36 @@
+# === 秘密情報（絶対に Git 管理しない） ===
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*credentials*
+*secret*
+*token*
+*apikey*
+*api_key*
+
+# === Obsidian ===
+# 設定は共有したいが、端末依存のキャッシュ・ワークスペースは除外
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.obsidian/plugins/*/data.json
+.trash/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === 一時ファイル ===
+*.tmp
+*.bak
+*~
+.claude/settings.local.json
+
+# === Python（既存スクリプト用） ===
+__pycache__/
+*.pyc
+.venv/
+venv/
