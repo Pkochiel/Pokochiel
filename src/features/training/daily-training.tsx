@@ -5,6 +5,8 @@ import { ButtonLink } from '@/components/ui/button'
 import { CHUNKING, MEANING_FLASH } from '@/core/config/training-config'
 import { initialTargetCpm } from '@/core/metrics/cpm'
 import { formatLocalDate } from '@/core/util/date'
+import { ruleBasedFeedback, type FeedbackMessage } from '@/core/feedback/feedback'
+import { computeSkillProfile } from '@/core/metrics/skill-profile'
 import type { ChunkLevel, PlanBlock, TrainingPassage } from '@/core/types'
 import { getPassageById, selectPassageForTraining } from '@/data/content'
 import { getRepository, resolveTimezone } from '@/data/repositories'
@@ -19,6 +21,7 @@ import { StructureReadingBlock } from './structure-reading/structure-reading-blo
 import { ComprehensionBlock } from './comprehension/comprehension-block'
 import { ImmediateRecallBlock } from './immediate-recall/immediate-recall-block'
 import { DelayedRecallBlock } from '../recall/delayed-recall-block'
+import { BlockTransition } from './block-transition'
 import { SessionResult, type SessionSummary } from './session-result'
 import { useDailyPlan } from './use-daily-plan'
 import { finishSession, type CompletedBlock } from './save-session'
@@ -53,6 +56,10 @@ export function DailyTraining() {
   const [index, setIndex] = useState(0)
   const [completed, setCompleted] = useState<CompletedBlock[]>([])
   const [summary, setSummary] = useState<SessionSummary | null>(null)
+  const [transition, setTransition] = useState<{
+    completed: PlanBlock
+    messages: FeedbackMessage[]
+  } | null>(null)
   const sessionRef = useRef<{ id: string; startedAt: Date } | null>(null)
   const finishingRef = useRef(false)
 
@@ -87,6 +94,11 @@ export function DailyTraining() {
       const timezone = resolveTimezone()
 
       if (!session) {
+        const emptyProfile = computeSkillProfile({
+          results: [],
+          recallTasks: [],
+          baselineCpm: profile?.baselineCpm ?? null,
+        })
         setSummary({
           cpm: null,
           comprehension: null,
@@ -95,6 +107,10 @@ export function DailyTraining() {
           direction: 'hold',
           reason: '記録を保存できませんでした',
           blocksCompleted: blocks.length,
+          skillProfile: emptyProfile,
+          feedback: [
+            { tone: 'neutral', text: '今回の結果は保存されていません。もう一度お試しください。' },
+          ],
         })
         return
       }
@@ -115,6 +131,16 @@ export function DailyTraining() {
         startedAt: session.startedAt,
       })
 
+      const [results, recallTasks] = await Promise.all([
+        repository.listResults(),
+        repository.listRecallTasks(),
+      ])
+      const skillProfile = computeSkillProfile({
+        results,
+        recallTasks,
+        baselineCpm: profile?.baselineCpm ?? null,
+      })
+
       setSummary({
         cpm: result.cpm,
         comprehension: result.comprehension,
@@ -123,6 +149,18 @@ export function DailyTraining() {
         direction: result.adaptation.direction,
         reason: result.adaptation.reason,
         blocksCompleted: blocks.length,
+        skillProfile,
+        feedback: ruleBasedFeedback.forSession({
+          profile: skillProfile,
+          cpm: result.cpm,
+          comprehension: result.comprehension,
+          immediateRecall: result.immediateRecall,
+          previousCpm:
+            previous.filter((r) => r.cpm !== null).slice(-2)[0]?.cpm ?? null,
+          previousComprehension:
+            previous.filter((r) => r.comprehensionScore !== null).slice(-2)[0]
+              ?.comprehensionScore ?? null,
+        }),
       })
     },
     [chunkLevel, meaningFlashLevel, profile?.baselineCpm, targetCpm],
@@ -152,16 +190,53 @@ export function DailyTraining() {
       const nextCompleted = [...completed, { block, outcome }]
       setCompleted(nextCompleted)
 
-      if (!plan || index + 1 >= plan.blocks.length) {
-        void finalize(nextCompleted)
-        return
-      }
-      setIndex(index + 1)
+      void (async () => {
+        // 直近の同種トレーニングと比べてフィードバックを作る
+        const previous = await getRepository().listResults({ trainingType: block.type })
+        const last = previous[previous.length - 1]
+        setTransition({
+          completed: block,
+          messages: ruleBasedFeedback.forTraining({
+            trainingType: block.type,
+            cpm: outcome.cpm ?? null,
+            targetCpm: outcome.targetCpm ?? null,
+            comprehensionScore: outcome.comprehensionScore ?? null,
+            accuracyScore: outcome.accuracyScore ?? null,
+            immediateRecallScore: outcome.immediateRecallScore ?? null,
+            previousCpm: last?.cpm ?? null,
+            previousComprehension: last?.comprehensionScore ?? null,
+          }),
+        })
+      })()
     },
-    [completed, finalize, index, plan],
+    [completed],
   )
 
+  const continueAfterTransition = useCallback(() => {
+    setTransition(null)
+    if (!plan || index + 1 >= plan.blocks.length) {
+      void finalize(completed)
+      return
+    }
+    setIndex(index + 1)
+  }, [completed, finalize, index, plan])
+
   if (summary) return <SessionResult summary={summary} />
+
+  if (transition && plan) {
+    const currentIndex = plan.blocks.findIndex((b) => b.order === transition.completed.order)
+    const next = plan.blocks[currentIndex + 1]
+    return (
+      <BlockTransition
+        completed={transition.completed.type}
+        next={next?.type ?? null}
+        index={currentIndex + 1}
+        total={plan.blocks.length}
+        messages={transition.messages}
+        onContinue={continueAfterTransition}
+      />
+    )
+  }
 
   if (loading || !plan) {
     return (

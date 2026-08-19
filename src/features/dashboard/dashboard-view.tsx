@@ -2,6 +2,9 @@
 
 import { ButtonLink } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
+import { SKILL_LABELS, type SkillId, type SkillProfile, type SkillState } from '@/core/types'
+import { rankSkillsByNeed } from '@/core/metrics/skill-profile'
+import { cn } from '@/lib/cn'
 import { useDailyPlan } from '@/features/training/use-daily-plan'
 import { StatsGrid, type StatsGridValues } from './stats-grid'
 import { TodayCard } from './today-card'
@@ -16,8 +19,56 @@ const EMPTY_STATS: StatsGridValues = {
   ers: null,
 }
 
+const STATE_LABELS: Record<SkillState, string> = {
+  unmeasured: '未測定',
+  weak: '弱い',
+  normal: '標準',
+  strong: '強い',
+}
+
+const STATE_CLASSES: Record<SkillState, string> = {
+  unmeasured: 'bg-surface-muted text-fg-subtle',
+  weak: 'bg-accent-soft text-accent',
+  normal: 'bg-surface-muted text-fg-muted',
+  strong: 'bg-brand-soft text-brand',
+}
+
+/** 主要指標としての Skill Profile。弱い順に並べ、まず何を鍛えるかを見せる。 */
+function SkillSummary({ profile }: { profile: SkillProfile }) {
+  const ranked = rankSkillsByNeed(profile)
+  const measured = ranked.filter((m) => m.state !== 'unmeasured').length
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <ul className="space-y-2">
+        {ranked.map((measurement) => (
+          <li key={measurement.id} className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-fg-muted">{SKILL_LABELS[measurement.id as SkillId]}</span>
+            <span className="flex items-center gap-2">
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                  STATE_CLASSES[measurement.state],
+                )}
+              >
+                {STATE_LABELS[measurement.state]}
+              </span>
+              <span className="tabular w-8 text-right font-medium">
+                {measurement.score ?? '—'}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 text-xs text-fg-subtle">
+        {measured} / {ranked.length} を測定済み。弱い順に並べています。未測定は弱点とは区別します。
+      </p>
+    </div>
+  )
+}
+
 export function DashboardView() {
-  const { loading, profile, stats, dueRecallTasks } = useDashboardData()
+  const { loading, profile, stats, skillProfile, dueRecallTasks } = useDashboardData()
   const { plan } = useDailyPlan()
 
   const totalMinutes = profile?.preferredDurationMinutes ?? 30
@@ -56,6 +107,15 @@ export function DashboardView() {
         </Card>
       ) : null}
 
+      {skillProfile ? (
+        <section>
+          <h2 className="mb-3 text-sm font-semibold tracking-wide text-fg-muted uppercase">
+            Skill Profile
+          </h2>
+          <SkillSummary profile={skillProfile} />
+        </section>
+      ) : null}
+
       <section>
         <h2 className="mb-3 text-sm font-semibold tracking-wide text-fg-muted uppercase">
           Current Stats
@@ -63,7 +123,8 @@ export function DashboardView() {
         <StatsGrid stats={stats ?? EMPTY_STATS} />
         {!loading && stats && stats.sampleCounts.cpm > 0 ? (
           <p className="mt-3 text-xs text-fg-subtle">
-            直近 {stats.sampleCounts.cpm} 件の実績から算出しています。
+            直近 {stats.sampleCounts.cpm} 件の実績から算出しています。ERS
+            は速度・理解・記憶をまとめた参考値です。
           </p>
         ) : null}
       </section>

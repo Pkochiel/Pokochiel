@@ -1,9 +1,13 @@
 import Link from 'next/link'
 import { ButtonLink } from '@/components/ui/button'
 import { Stat } from '@/components/ui/stat'
+import { SkillProfileChart } from '@/components/charts/skill-profile-chart'
 import { calculateErs } from '@/core/metrics/ers'
 import { formatScore } from '@/lib/format'
+import { cn } from '@/lib/cn'
 import type { SpeedDirection } from '@/core/adaptive/speed'
+import type { FeedbackMessage } from '@/core/feedback/feedback'
+import type { SkillProfile } from '@/core/types'
 
 export interface SessionSummary {
   cpm: number | null
@@ -13,6 +17,9 @@ export interface SessionSummary {
   direction: SpeedDirection
   reason: string
   blocksCompleted: number
+  /** 主要指標。ERS ではなくこちらを先に見せる。 */
+  skillProfile: SkillProfile
+  feedback: readonly FeedbackMessage[]
 }
 
 const DIRECTION_LABELS: Record<SpeedDirection, string> = {
@@ -36,12 +43,44 @@ export function SessionResult({ summary }: { summary: SessionSummary }) {
       </h1>
       <p className="mt-2 text-sm text-fg-muted">{summary.blocksCompleted} 個のトレーニングを実施</p>
 
-      <div className="mt-8 grid grid-cols-2 gap-3">
+      <ul className="mt-8 space-y-3">
+        {summary.feedback.map((message) => (
+          <li
+            key={message.text}
+            className={cn(
+              'rounded-2xl border bg-surface p-5 text-sm leading-relaxed',
+              message.tone === 'positive'
+                ? 'border-positive'
+                : message.tone === 'caution'
+                  ? 'border-accent'
+                  : 'border-border',
+            )}
+          >
+            {message.text}
+          </li>
+        ))}
+      </ul>
+
+      <section className="mt-6 rounded-2xl border border-border bg-surface p-5">
+        <h2 className="text-sm font-semibold">Skill Profile</h2>
+        <p className="mt-1 text-xs text-fg-subtle">
+          9つの能力を独立に評価します。これが主要な指標です。
+        </p>
+        <div className="mt-4">
+          <SkillProfileChart profile={summary.skillProfile} />
+        </div>
+      </section>
+
+      <div className="mt-6 grid grid-cols-2 gap-3">
         <Stat label="Reading Speed" value={formatScore(summary.cpm)} unit="字/分" tone="brand" />
         <Stat label="Comprehension" value={formatScore(summary.comprehension, '%')} />
         <Stat label="Immediate Recall" value={formatScore(summary.immediateRecall, '%')} />
-        <Stat label="ERS" value={formatScore(ers)} hint="速度 × 理解 × 想起" />
+        <Stat label="ERS" value={formatScore(ers)} hint="速度 × 理解 × 想起（参考値）" />
       </div>
+      <p className="mt-2 text-xs text-fg-subtle">
+        ERS は速度・理解・記憶を一つにまとめた参考値です。速度が高いほど大きく出るため、
+        単独では能力の総合指標になりません。
+      </p>
 
       <section className="mt-6 rounded-2xl border border-border bg-surface p-5">
         <h2 className="text-sm font-semibold">

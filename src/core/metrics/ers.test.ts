@@ -50,3 +50,33 @@ describe('calculateRetainedErs', () => {
     ).toBeNull()
   })
 })
+
+describe('ERS の限界（唯一の総合指標にしないための確認）', () => {
+  it('ERS は CPM に対して線形に伸びる', () => {
+    const base = calculateErs({ cpm: 600, comprehensionScore: 80, recallScore: 70 })
+    const doubled = calculateErs({ cpm: 1200, comprehensionScore: 80, recallScore: 70 })
+    expect(doubled).toBe((base ?? 0) * 2)
+  })
+
+  it('極端な CPM は ERS を極端に押し上げる（上限がない）', () => {
+    const realistic = calculateErs({ cpm: 700, comprehensionScore: 85, recallScore: 75 })
+    const extreme = calculateErs({ cpm: 5000, comprehensionScore: 85, recallScore: 75 })
+    expect(extreme).toBeGreaterThan((realistic ?? 0) * 5)
+  })
+
+  it('理解と想起が中程度でも、CPM が大きければ深く読んだ場合を上回る', () => {
+    const fastShallow = calculateErs({ cpm: 4000, comprehensionScore: 60, recallScore: 50 })
+    const slowDeep = calculateErs({ cpm: 700, comprehensionScore: 100, recallScore: 100 })
+    // これは ERS の設計上の性質であり、Skill Profile を主要指標に置く理由でもある
+    expect(fastShallow).toBeGreaterThan(slowDeep ?? 0)
+  })
+
+  it('理解または想起が 0 なら、CPM がいくら高くても 0 になる', () => {
+    expect(calculateErs({ cpm: 9999, comprehensionScore: 0, recallScore: 100 })).toBe(0)
+    expect(calculateErs({ cpm: 9999, comprehensionScore: 100, recallScore: 0 })).toBe(0)
+  })
+
+  it('無効な計測は ERS に到達しない（呼び出し側が null を渡す前提）', () => {
+    expect(calculateErs({ cpm: null, comprehensionScore: 100, recallScore: 100 })).toBeNull()
+  })
+})
