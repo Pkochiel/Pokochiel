@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { computeSkillRadar } from '@/core/metrics/skill-radar'
+import { computeSkillProfile } from '@/core/metrics/skill-profile'
 import { generateDailyPlan, toCandidates } from '@/core/planner/daily-plan'
 import { initialTargetCpm } from '@/core/metrics/cpm'
-import { CHUNKING } from '@/core/config/training-config'
+import { CHUNKING, MEANING_FLASH } from '@/core/config/training-config'
 import { formatLocalDate } from '@/core/util/date'
 import type { DailyTrainingPlan, Difficulty, Profile } from '@/core/types'
 import { ALL_PASSAGES } from '@/data/content'
@@ -14,7 +14,8 @@ import { getRepository, resolveTimezone } from '@/data/repositories'
 const FALLBACK_CPM = 600
 
 /** 理解度から教材の難易度を選ぶ。高すぎる教材で理解度を落とさない。 */
-function preferredDifficulty(comprehension: number): Difficulty {
+function preferredDifficulty(comprehension: number | null): Difficulty {
+  if (comprehension === null) return 3
   if (comprehension >= 90) return 4
   if (comprehension >= 75) return 3
   return 2
@@ -63,20 +64,20 @@ export function useDailyPlan(): DailyPlanState {
       }
 
       const baselineCpm = profile?.baselineCpm ?? null
-      const { scores: radar, measured } = computeSkillRadar({ results, recallTasks, baselineCpm })
+      const skillProfile = computeSkillProfile({ results, recallTasks, baselineCpm })
       const recentPassageIds = results.flatMap((r) => (r.passageId ? [r.passageId] : []))
 
       const plan = generateDailyPlan({
         date: today,
         totalMinutes: profile?.preferredDurationMinutes ?? 30,
-        radar,
-        measuredAxes: measured,
+        profile: skillProfile,
         passages: toCandidates(ALL_PASSAGES),
         recentPassageIds,
         dueRecallCount: dueRecall.length,
         targetCpm: profile?.targetCpm ?? initialTargetCpm(baselineCpm ?? FALLBACK_CPM),
         chunkLevel: profile?.chunkLevel ?? CHUNKING.defaultLevel,
-        preferredDifficulty: preferredDifficulty(radar.comprehension),
+        meaningFlashLevel: profile?.chunkLevel ?? MEANING_FLASH.defaultLevel,
+        preferredDifficulty: preferredDifficulty(skillProfile.comprehension.score),
         userId: profile?.id ?? 'local-user',
         createdAt: new Date().toISOString(),
         planId: globalThis.crypto.randomUUID(),

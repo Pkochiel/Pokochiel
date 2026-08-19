@@ -12,11 +12,25 @@ const difficulty = chunkLevel
 const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const score = z.number().min(0).max(100).nullable()
 
+const baselineProfileSchema = z.object({
+  cpm: z.number().nullable(),
+  comprehension: score,
+  mainIdea: score,
+  causeEffect: score,
+  structure: score,
+  immediateRecall: score,
+  attempts: z.number().int().nonnegative(),
+  updatedAt: z.string().nullable(),
+})
+
 export const profileSchema = z.object({
   id: z.string(),
   displayName: z.string().nullable(),
   baselineCpm: z.number().positive().nullable(),
   targetCpm: z.number().positive().nullable(),
+  /** 旧データには存在しないため既定値を与える（migration compatibility） */
+  baselineProfile: baselineProfileSchema.nullable().default(null),
+  usedBaselinePassageIds: z.array(z.string()).default([]),
   preferredDurationMinutes: planDuration,
   chunkLevel,
   timezone: z.string(),
@@ -60,7 +74,12 @@ export const resultSchema = z.object({
   targetCpm: z.number().nonnegative().nullable(),
   backCount: z.number().nonnegative().nullable(),
   pauseCount: z.number().nonnegative().nullable(),
-  chunkLevel: chunkLevel.nullable(),
+  /** 現行のフィールド。旧データは chunkLevel から移送する */
+  level: chunkLevel.nullable().default(null),
+  /** 旧フィールド。読み出し時に level へ移送するためだけに受け付ける */
+  chunkLevel: chunkLevel.nullable().optional(),
+  accuracyScore: score.default(null),
+  exposureMs: z.number().nonnegative().nullable().default(null),
   difficulty: difficulty.nullable(),
   valid: z.boolean(),
   createdAt: z.string(),
@@ -78,6 +97,7 @@ export const readingTestSchema = z.object({
   comprehensionScore: score,
   recallScore: score,
   recallText: z.string().nullable(),
+  typeScores: z.record(z.string(), z.number()).nullable().default(null),
   createdAt: z.string(),
 })
 

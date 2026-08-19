@@ -7,7 +7,12 @@ export interface BlockOutcome {
   comprehensionScore?: number | null
   immediateRecallScore?: number | null
   recallText?: string | null
-  chunkLevel?: ChunkLevel | null
+  /** そのトレーニングのレベル（Chunk Reading / Meaning Flash） */
+  level?: ChunkLevel | null
+  /** トレーニング固有の正答率・一致率（0–100） */
+  accuracyScore?: number | null
+  /** Meaning Flash の1件あたり表示時間（ms） */
+  exposureMs?: number | null
   backCount?: number | null
   pauseCount?: number | null
   valid?: boolean

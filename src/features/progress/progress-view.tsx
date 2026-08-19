@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Card, CardHeader } from '@/components/ui/card'
 import { LineChart } from '@/components/charts/line-chart'
-import { SkillRadarChart } from '@/components/charts/skill-radar-chart'
+import { SkillProfileChart } from '@/components/charts/skill-profile-chart'
 import { cn } from '@/lib/cn'
 import { useProgressData } from './use-progress-data'
 
@@ -12,7 +12,7 @@ type PeriodDays = (typeof PERIODS)[number]
 
 export function ProgressView() {
   const [days, setDays] = useState<PeriodDays>(30)
-  const { loading, series, radar } = useProgressData(days)
+  const { loading, series, skillProfile } = useProgressData(days)
 
   return (
     <div className="space-y-6">
@@ -81,13 +81,13 @@ export function ProgressView() {
             />
           </Card>
 
-          {radar ? (
+          {skillProfile ? (
             <Card>
               <CardHeader
-                title="Skill Radar"
-                description="6つの能力のバランス。実績が少ない軸は中央値で表示します。"
+                title="Skill Profile"
+                description="9つの認知能力を独立に評価します。未測定は弱点とは区別します。"
               />
-              <SkillRadarChart scores={radar.scores} measured={radar.measured} />
+              <SkillProfileChart profile={skillProfile} />
             </Card>
           ) : null}
         </>

@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type {
+  ChunkLevel,
   DailyTrainingPlan,
   LocalDate,
   Profile,
@@ -108,6 +109,9 @@ export class LocalStorageRepository implements TrainingRepository {
       preferredDurationMinutes:
         input.preferredDurationMinutes ?? existing?.preferredDurationMinutes ?? 30,
       chunkLevel: input.chunkLevel ?? existing?.chunkLevel ?? CHUNKING.defaultLevel,
+      baselineProfile: input.baselineProfile ?? existing?.baselineProfile ?? null,
+      usedBaselinePassageIds:
+        input.usedBaselinePassageIds ?? existing?.usedBaselinePassageIds ?? [],
       timezone: input.timezone ?? existing?.timezone ?? this.deps.defaultTimezone ?? 'Asia/Tokyo',
       onboardedAt: input.onboardedAt ?? existing?.onboardedAt ?? null,
       createdAt: existing?.createdAt ?? now,
@@ -162,7 +166,9 @@ export class LocalStorageRepository implements TrainingRepository {
       targetCpm: input.targetCpm ?? null,
       backCount: input.backCount ?? null,
       pauseCount: input.pauseCount ?? null,
-      chunkLevel: input.chunkLevel ?? null,
+      level: input.level ?? null,
+      accuracyScore: input.accuracyScore ?? null,
+      exposureMs: input.exposureMs ?? null,
       difficulty: input.difficulty ?? null,
       valid: input.valid ?? true,
       createdAt: this.nowIso(),
@@ -172,20 +178,31 @@ export class LocalStorageRepository implements TrainingRepository {
     return result
   }
 
+  /**
+   * 旧スキーマの行を現行のドメイン型に合わせる。
+   * chunkLevel は level に統合されたため、古い記録を落とさずに引き継ぐ。
+   */
+  private migrateResult(row: TrainingResult & { chunkLevel?: ChunkLevel | null }): TrainingResult {
+    const { chunkLevel, ...rest } = row
+    return { ...rest, level: rest.level ?? chunkLevel ?? null }
+  }
+
   async listResults(query: ResultQuery = {}): Promise<TrainingResult[]> {
     const validOnly = query.validOnly ?? true
     const sessions = await this.listSessions()
     const dateBySession = new Map(sessions.map((s) => [s.id, s.localDate]))
 
-    return (this.readList(KEYS.results, resultSchema) as TrainingResult[]).filter((result) => {
-      if (validOnly && !result.valid) return false
-      if (query.trainingType && result.trainingType !== query.trainingType) return false
+    return (this.readList(KEYS.results, resultSchema) as TrainingResult[])
+      .map((row) => this.migrateResult(row))
+      .filter((result) => {
+        if (validOnly && !result.valid) return false
+        if (query.trainingType && result.trainingType !== query.trainingType) return false
 
-      const date = dateBySession.get(result.sessionId)
-      if (query.from && (!date || compareLocalDate(date, query.from) < 0)) return false
-      if (query.to && (!date || compareLocalDate(date, query.to) > 0)) return false
-      return true
-    })
+        const date = dateBySession.get(result.sessionId)
+        if (query.from && (!date || compareLocalDate(date, query.from) < 0)) return false
+        if (query.to && (!date || compareLocalDate(date, query.to) > 0)) return false
+        return true
+      })
   }
 
   // ---- Reading tests --------------------------------------------------
@@ -195,6 +212,7 @@ export class LocalStorageRepository implements TrainingRepository {
       id: this.deps.createId(),
       userId: LOCAL_USER_ID,
       ...input,
+      typeScores: input.typeScores ?? null,
       createdAt: this.nowIso(),
     }
     const tests = this.readList(KEYS.readingTests, readingTestSchema) as ReadingTest[]

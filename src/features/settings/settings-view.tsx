@@ -66,11 +66,9 @@ export function SettingsView() {
           ))}
         </div>
         <p className="mt-3 text-xs text-fg-subtle">
-          {current} 分の構成:{' '}
-          {Object.entries(PLAN.presets[current])
-            .map(([, m]) => m)
-            .join(' + ')}{' '}
-          分
+          {current} 分のうち{' '}
+          {Object.values(PLAN.core[current]).reduce((a, b) => a + b, 0)} 分が必須のトレーニング、
+          残り {PLAN.optionalBudget[current]} 分は弱点に応じて選ばれます。
         </p>
         {saved ? <p className="mt-2 text-xs text-positive">保存しました。</p> : null}
       </Card>

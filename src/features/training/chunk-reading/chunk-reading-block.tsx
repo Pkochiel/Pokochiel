@@ -134,7 +134,7 @@ export function ChunkReadingBlock({
           onComplete({
             comprehensionScore: comprehension.score,
             questionCount: comprehension.total,
-            chunkLevel,
+            level: chunkLevel,
           })
         }}
       />

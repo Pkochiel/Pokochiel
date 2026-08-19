@@ -1,4 +1,5 @@
 import type { ChunkLevel, LocalDate, PlanDuration } from './common'
+import type { SkillId } from './skill'
 import type { TrainingType } from './training'
 
 export interface PlanBlock {
@@ -26,16 +27,9 @@ export interface DailyTrainingPlan {
 }
 
 export interface PlanReason {
-  weakestSkills: SkillAxis[]
+  /** 弱い順に並べたスキル。構成の説明に使う。 */
+  weakestSkills: SkillId[]
+  /** まだ測っていないため、測定のために入れたトレーニング */
+  measuredForFirstTime?: SkillId[]
   notes: string[]
 }
-
-export type SkillAxis =
-  | 'reading_speed'
-  | 'chunking'
-  | 'structure'
-  | 'comprehension'
-  | 'recall'
-  | 'adaptive_reading'
-
-export type SkillRadar = Record<SkillAxis, number>

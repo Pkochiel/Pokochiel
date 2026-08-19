@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { computeSkillRadar, type SkillRadarResult } from '@/core/metrics/skill-radar'
+import { computeSkillProfile } from '@/core/metrics/skill-profile'
+import type { SkillProfile } from '@/core/types'
 import { buildProgressSeries, type ProgressSeries } from '@/core/metrics/progress-series'
 import { formatLocalDate } from '@/core/util/date'
 import { getRepository, resolveTimezone } from '@/data/repositories'
@@ -9,11 +10,11 @@ import { getRepository, resolveTimezone } from '@/data/repositories'
 export interface ProgressData {
   loading: boolean
   series: ProgressSeries | null
-  radar: SkillRadarResult | null
+  skillProfile: SkillProfile | null
 }
 
 export function useProgressData(days: number): ProgressData {
-  const [data, setData] = useState<ProgressData>({ loading: true, series: null, radar: null })
+  const [data, setData] = useState<ProgressData>({ loading: true, series: null, skillProfile: null })
 
   useEffect(() => {
     let cancelled = false
@@ -43,7 +44,7 @@ export function useProgressData(days: number): ProgressData {
           days,
           timezone,
         }),
-        radar: computeSkillRadar({
+        skillProfile: computeSkillProfile({
           results,
           recallTasks,
           baselineCpm: profile?.baselineCpm ?? null,

@@ -87,7 +87,9 @@ export function SingleTraining({ type }: { type: TrainingType }) {
         targetCpm: result.targetCpm ?? null,
         comprehensionScore: result.comprehensionScore ?? null,
         immediateRecallScore: result.immediateRecallScore ?? null,
-        chunkLevel: result.chunkLevel ?? null,
+        level: result.level ?? null,
+        accuracyScore: result.accuracyScore ?? null,
+        exposureMs: result.exposureMs ?? null,
         pauseCount: result.pauseCount ?? null,
         valid: result.valid ?? true,
       })

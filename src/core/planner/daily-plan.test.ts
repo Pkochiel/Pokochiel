@@ -1,34 +1,53 @@
 import { describe, expect, it } from 'vitest'
 import { PLAN } from '../config/training-config'
-import { toLocalDate } from '../types/common'
-import type { PlanDuration } from '../types/common'
-import type { SkillRadar } from '../types/plan'
-import { generateDailyPlan, type GenerateDailyPlanInput } from './daily-plan'
+import { toLocalDate, type PlanDuration } from '../types/common'
+import type { SkillId, SkillProfile, SkillState } from '../types/skill'
+import { SKILL_IDS } from '../types/skill'
+import type { TrainingType } from '../types/training'
+import { generateDailyPlan, type GenerateDailyPlanInput, type PassageCandidate } from './daily-plan'
 
-const NEUTRAL_RADAR: SkillRadar = {
-  reading_speed: 60,
-  chunking: 60,
-  structure: 60,
-  comprehension: 75,
-  recall: 60,
-  adaptive_reading: 60,
+function profileOf(
+  overrides: Partial<Record<SkillId, { score: number; state: SkillState }>> = {},
+): SkillProfile {
+  return Object.fromEntries(
+    SKILL_IDS.map((id) => {
+      const override = overrides[id]
+      return [
+        id,
+        {
+          id,
+          score: override?.score ?? null,
+          state: override?.state ?? 'unmeasured',
+          sampleCount: override ? 3 : 0,
+          trend: null,
+        },
+      ]
+    }),
+  ) as SkillProfile
 }
 
-const PASSAGES = Array.from({ length: 12 }, (_, i) => ({
+const weak = (score = 30) => ({ score, state: 'weak' as const })
+const normal = (score = 65) => ({ score, state: 'normal' as const })
+const strong = (score = 90) => ({ score, state: 'strong' as const })
+
+const PASSAGES: PassageCandidate[] = Array.from({ length: 14 }, (_, i) => ({
   id: `p-${String(i + 1).padStart(2, '0')}`,
   difficulty: ((i % 5) + 1) as 1 | 2 | 3 | 4 | 5,
-  characterCount: 400 + i * 10,
+  characterCount: 900 + i * 20,
+  supportsPrediction: i % 2 === 0,
+  supportsVariableSpeed: i % 3 === 0,
 }))
 
 const input = (overrides: Partial<GenerateDailyPlanInput> = {}): GenerateDailyPlanInput => ({
   date: toLocalDate('2026-08-19'),
   totalMinutes: 30,
-  radar: NEUTRAL_RADAR,
+  profile: profileOf(),
   passages: PASSAGES,
   recentPassageIds: [],
   dueRecallCount: 0,
   targetCpm: 690,
   chunkLevel: 2,
+  meaningFlashLevel: 2,
   preferredDifficulty: 3,
   userId: 'u',
   createdAt: '2026-08-19T09:00:00Z',
@@ -36,213 +55,258 @@ const input = (overrides: Partial<GenerateDailyPlanInput> = {}): GenerateDailyPl
   ...overrides,
 })
 
-const totalMinutes = (plan: { blocks: { type: string; minutes: number }[] }) =>
+const trainingMinutes = (plan: { blocks: { type: string; minutes: number }[] }) =>
   plan.blocks
     .filter((b) => b.type !== 'delayed_recall')
     .reduce((sum, b) => sum + b.minutes, 0)
 
-describe('generateDailyPlan', () => {
-  it.each([10, 20, 30] as PlanDuration[])('合計時間が %i 分ちょうどになる', (minutes) => {
-    const plan = generateDailyPlan(input({ totalMinutes: minutes }))
-    expect(totalMinutes(plan)).toBe(minutes)
+const minutesOf = (
+  plan: { blocks: { type: string; minutes: number }[] },
+  type: string,
+): number => plan.blocks.find((b) => b.type === type)?.minutes ?? 0
+
+describe('generateDailyPlan: 時間配分', () => {
+  it.each([10, 20, 30] as PlanDuration[])('合計が %i 分ちょうどになる', (minutes) => {
+    expect(trainingMinutes(generateDailyPlan(input({ totalMinutes: minutes })))).toBe(minutes)
   })
 
-  it('仕様どおりの構成を含む', () => {
-    const plan = generateDailyPlan(input())
-    expect(plan.blocks.map((b) => b.type)).toEqual([
-      'warmup',
-      'speed_push',
-      'chunk_reading',
-      'structure_reading',
-      'comprehension',
-      'immediate_recall',
-    ])
-  })
+  it.each([10, 20, 30] as PlanDuration[])(
+    '%i 分でも弱点がある場合に合計が変わらない',
+    (minutes) => {
+      const plan = generateDailyPlan(
+        input({
+          totalMinutes: minutes,
+          profile: profileOf({
+            meaning_extraction: weak(),
+            structure_recognition: weak(),
+            immediate_recall: weak(),
+          }),
+        }),
+      )
+      expect(trainingMinutes(plan)).toBe(minutes)
+    },
+  )
 
-  it('同じ入力からは常に同じ構成になる（決定的）', () => {
-    expect(generateDailyPlan(input())).toEqual(generateDailyPlan(input()))
-  })
-
-  it('order が 1 から連番になる', () => {
-    const plan = generateDailyPlan(input())
-    expect(plan.blocks.map((b) => b.order)).toEqual([1, 2, 3, 4, 5, 6])
+  it('30 分を超えない', () => {
+    const plan = generateDailyPlan(input({ dueRecallCount: 3 }))
+    const total = plan.blocks.reduce((sum, b) => sum + b.minutes, 0)
+    expect(total).toBeLessThanOrEqual(30 + PLAN.delayedRecallMinutes)
   })
 
   it('各ブロックが最小分数を下回らない', () => {
-    const plan = generateDailyPlan(input({ radar: { ...NEUTRAL_RADAR, recall: 10, chunking: 10 } }))
-    for (const block of plan.blocks) {
-      expect(block.minutes).toBeGreaterThanOrEqual(PLAN.blockMinMinutes)
-    }
-  })
-
-  describe('翌日 Recall', () => {
-    it('実施待ちがあれば先頭に差し込む', () => {
-      const plan = generateDailyPlan(input({ dueRecallCount: 1 }))
-      expect(plan.blocks[0]?.type).toBe('delayed_recall')
-      expect(plan.blocks[0]?.order).toBe(1)
-    })
-
-    it('差し込んでも本編の合計時間は変わらない', () => {
-      expect(totalMinutes(generateDailyPlan(input({ dueRecallCount: 2 })))).toBe(30)
-    })
-
-    it('実施待ちがなければ差し込まない', () => {
-      const plan = generateDailyPlan(input())
-      expect(plan.blocks.some((b) => b.type === 'delayed_recall')).toBe(false)
-    })
-  })
-
-  describe('弱点に応じた配分', () => {
-    it('Recall が低いとき、速度ではなく Recall と Structure の配分を増やす', () => {
-      const weak = generateDailyPlan(input({ radar: { ...NEUTRAL_RADAR, recall: 20 } }))
-      const neutral = generateDailyPlan(input())
-
-      const minutesOf = (plan: typeof weak, type: string) =>
-        plan.blocks.find((b) => b.type === type)?.minutes ?? 0
-
-      expect(minutesOf(weak, 'immediate_recall')).toBeGreaterThan(
-        minutesOf(neutral, 'immediate_recall'),
-      )
-      expect(minutesOf(weak, 'structure_reading')).toBeGreaterThanOrEqual(
-        minutesOf(neutral, 'structure_reading'),
-      )
-      // 速度そのものは下げない
-      expect(weak.targetCpm).toBe(neutral.targetCpm)
-      expect(minutesOf(weak, 'speed_push')).toBeLessThanOrEqual(minutesOf(neutral, 'speed_push'))
-    })
-
-    it('Chunking が弱いとき Chunk Reading を増やす', () => {
-      const weak = generateDailyPlan(input({ radar: { ...NEUTRAL_RADAR, chunking: 20 } }))
-      const neutral = generateDailyPlan(input())
-      const minutesOf = (plan: typeof weak, type: string) =>
-        plan.blocks.find((b) => b.type === type)?.minutes ?? 0
-      expect(minutesOf(weak, 'chunk_reading')).toBeGreaterThan(minutesOf(neutral, 'chunk_reading'))
-    })
-
-    it('弱点の判定理由を残す', () => {
-      const plan = generateDailyPlan(input({ radar: { ...NEUTRAL_RADAR, recall: 20 } }))
-      expect(plan.generatedReason?.notes.join()).toContain('想起')
-      expect(plan.generatedReason?.weakestSkills[0]).toBe('recall')
-    })
-  })
-
-  describe('教材の割り当て', () => {
-    it('Speed Push / Chunk / Structure に別々の教材を割り当てる', () => {
-      const plan = generateDailyPlan(input())
-      const ids = ['speed_push', 'chunk_reading', 'structure_reading'].map(
-        (type) => plan.blocks.find((b) => b.type === type)?.passageId,
-      )
-      expect(new Set(ids).size).toBe(3)
-      expect(ids.every(Boolean)).toBe(true)
-    })
-
-    it('Comprehension と Immediate Recall は Structure と同じ教材を使う', () => {
-      const plan = generateDailyPlan(input())
-      const structureId = plan.blocks.find((b) => b.type === 'structure_reading')?.passageId
-      expect(plan.blocks.find((b) => b.type === 'comprehension')?.passageId).toBe(structureId)
-      expect(plan.blocks.find((b) => b.type === 'immediate_recall')?.passageId).toBe(structureId)
-    })
-
-    it('直近で使った教材を避ける', () => {
-      const plan = generateDailyPlan(input())
-      const used = plan.blocks.flatMap((b) => (b.passageId ? [b.passageId] : []))
-      const next = generateDailyPlan(input({ recentPassageIds: used }))
-      const nextUsed = next.blocks.flatMap((b) => (b.passageId ? [b.passageId] : []))
-      expect(nextUsed.some((id) => used.includes(id))).toBe(false)
-    })
-
-    it('目標難易度に近い教材を優先する', () => {
-      const plan = generateDailyPlan(input({ preferredDifficulty: 5 }))
-      const speedPushId = plan.blocks.find((b) => b.type === 'speed_push')?.passageId
-      const difficulty = PASSAGES.find((p) => p.id === speedPushId)?.difficulty
-      expect(difficulty).toBe(5)
-    })
-
-    it('教材が足りなくても落ちない', () => {
-      const plan = generateDailyPlan(input({ passages: PASSAGES.slice(0, 1) }))
-      expect(plan.blocks.length).toBeGreaterThan(0)
-    })
-  })
-
-  it('目標速度とチャンクレベルをブロックに渡す', () => {
-    const plan = generateDailyPlan(input({ targetCpm: 800, chunkLevel: 4 }))
-    expect(plan.blocks.find((b) => b.type === 'speed_push')?.targetCpm).toBe(800)
-    expect(plan.blocks.find((b) => b.type === 'chunk_reading')?.chunkLevel).toBe(4)
-  })
-})
-
-describe('新規ユーザー（実測がまだない場合）', () => {
-  const NEUTRAL_UNMEASURED = {
-    reading_speed: false,
-    chunking: false,
-    structure: false,
-    comprehension: false,
-    recall: false,
-    adaptive_reading: false,
-  }
-
-  const ALL_NEUTRAL: SkillRadar = {
-    reading_speed: 50,
-    chunking: 50,
-    structure: 50,
-    comprehension: 50,
-    recall: 50,
-    adaptive_reading: 50,
-  }
-
-  it('未実測の軸を弱点として扱わず、基本構成をそのまま使う', () => {
-    const plan = generateDailyPlan(
-      input({ radar: ALL_NEUTRAL, measuredAxes: NEUTRAL_UNMEASURED }),
-    )
-    expect(plan.blocks.map((b) => [b.type, b.minutes])).toEqual([
-      ['warmup', 3],
-      ['speed_push', 5],
-      ['chunk_reading', 5],
-      ['structure_reading', 7],
-      ['comprehension', 5],
-      ['immediate_recall', 5],
-    ])
-  })
-
-  it('実測がなければ、その旨を理由に残す', () => {
-    const plan = generateDailyPlan(
-      input({ radar: ALL_NEUTRAL, measuredAxes: NEUTRAL_UNMEASURED }),
-    )
-    expect(plan.generatedReason?.notes.join()).toContain('実績がまだない')
-  })
-
-  it('実測済みの軸だけで判断する', () => {
     const plan = generateDailyPlan(
       input({
-        radar: { ...ALL_NEUTRAL, chunking: 20, comprehension: 20 },
-        measuredAxes: { ...NEUTRAL_UNMEASURED, chunking: true },
+        profile: profileOf({
+          structure_recognition: weak(),
+          comprehension: weak(),
+          immediate_recall: weak(),
+        }),
       }),
     )
-    const minutesOf = (type: string) => plan.blocks.find((b) => b.type === type)?.minutes ?? 0
-    // chunking のみ実測 → 増えるのは Chunk Reading だけ
-    expect(minutesOf('chunk_reading')).toBeGreaterThan(5)
-    expect(minutesOf('comprehension')).toBeLessThanOrEqual(5)
-    expect(minutesOf('structure_reading')).toBeLessThanOrEqual(7)
-  })
-})
-
-describe('配分の移動', () => {
-  it('供出元もベース配分の半分は残す（構成が崩れない）', () => {
-    const plan = generateDailyPlan(
-      input({ radar: { ...NEUTRAL_RADAR, comprehension: 20, recall: 20, chunking: 20 } }),
-    )
     for (const block of plan.blocks) {
-      expect(block.minutes).toBeGreaterThanOrEqual(2)
+      expect(block.minutes).toBeGreaterThanOrEqual(PLAN.coreBlockMinMinutes)
     }
   })
 
-  it('移動量は総時間の 20% を超えない', () => {
-    const neutral = generateDailyPlan(input())
-    const weak = generateDailyPlan(input({ radar: { ...NEUTRAL_RADAR, recall: 10 } }))
-    const moved = weak.blocks.reduce((sum, block) => {
-      const before = neutral.blocks.find((b) => b.type === block.type)?.minutes ?? 0
-      return sum + Math.max(0, block.minutes - before)
-    }, 0)
-    expect(moved).toBeLessThanOrEqual(Math.floor(30 * PLAN.reallocationRatio))
+  it('コアのトレーニングは必ず含まれる', () => {
+    const types = generateDailyPlan(input()).blocks.map((b) => b.type)
+    const coreTypes: TrainingType[] = [
+      'warmup',
+      'speed_push',
+      'structure_reading',
+      'comprehension',
+      'immediate_recall',
+    ]
+    for (const core of coreTypes) {
+      expect(types).toContain(core)
+    }
+  })
+
+  it('order が 1 から連番になる', () => {
+    const plan = generateDailyPlan(input({ dueRecallCount: 1 }))
+    expect(plan.blocks.map((b) => b.order)).toEqual(
+      Array.from({ length: plan.blocks.length }, (_, i) => i + 1),
+    )
+  })
+
+  it('認知処理の順に並ぶ（意味 → チャンク → 予測 → 構造 → 速度切替）', () => {
+    const plan = generateDailyPlan(input({ totalMinutes: 30 }))
+    const order = plan.blocks.map((b) => b.type)
+    const indexOf = (type: TrainingType) => order.indexOf(type)
+    expect(indexOf('warmup')).toBeLessThan(indexOf('speed_push'))
+    expect(indexOf('speed_push')).toBeLessThan(indexOf('structure_reading'))
+    expect(indexOf('structure_reading')).toBeLessThan(indexOf('comprehension'))
+    expect(indexOf('comprehension')).toBeLessThan(indexOf('immediate_recall'))
+  })
+})
+
+describe('generateDailyPlan: 決定性', () => {
+  it('同じ入力からは常に同じ構成になる', () => {
+    expect(generateDailyPlan(input())).toEqual(generateDailyPlan(input()))
+  })
+
+  it('日付が変わると任意ブロックの選択が回る', () => {
+    const dates = ['2026-08-19', '2026-08-20', '2026-08-21', '2026-08-22']
+    const sets = dates.map((date) =>
+      generateDailyPlan(input({ date: toLocalDate(date) }))
+        .blocks.map((b) => b.type)
+        .join(','),
+    )
+    expect(new Set(sets).size).toBeGreaterThan(1)
+  })
+})
+
+describe('generateDailyPlan: 弱点に応じた選択', () => {
+  it('意味抽出が弱ければ Meaning Flash を入れる', () => {
+    const plan = generateDailyPlan(
+      input({ profile: profileOf({ meaning_extraction: weak() }) }),
+    )
+    expect(plan.blocks.map((b) => b.type)).toContain('meaning_flash')
+  })
+
+  it('予測が弱ければ Prediction Reading を入れる', () => {
+    const plan = generateDailyPlan(input({ profile: profileOf({ prediction: weak() }) }))
+    expect(plan.blocks.map((b) => b.type)).toContain('prediction_reading')
+  })
+
+  it('速度切替が弱ければ Variable Speed を入れる', () => {
+    const plan = generateDailyPlan(input({ profile: profileOf({ adaptive_reading: weak() }) }))
+    expect(plan.blocks.map((b) => b.type)).toContain('variable_speed')
+  })
+
+  it('チャンク認識が弱ければ Chunk Reading を入れる', () => {
+    const plan = generateDailyPlan(input({ profile: profileOf({ chunk_recognition: weak() }) }))
+    expect(plan.blocks.map((b) => b.type)).toContain('chunk_reading')
+  })
+
+  it('構造把握が弱ければ Structure Reading の時間を増やす', () => {
+    const base = generateDailyPlan(input({ profile: profileOf({ structure_recognition: normal() }) }))
+    const weakPlan = generateDailyPlan(
+      input({ profile: profileOf({ structure_recognition: weak() }) }),
+    )
+    expect(minutesOf(weakPlan, 'structure_reading')).toBeGreaterThan(
+      minutesOf(base, 'structure_reading'),
+    )
+  })
+
+  it('速度が高く理解が低いとき Speed Push を増やさない', () => {
+    const base = generateDailyPlan(input({ profile: profileOf({}) }))
+    const plan = generateDailyPlan(
+      input({ profile: profileOf({ reading_speed: strong(), comprehension: weak() }) }),
+    )
+    expect(minutesOf(plan, 'speed_push')).toBeLessThanOrEqual(minutesOf(base, 'speed_push'))
+    expect(minutesOf(plan, 'structure_reading')).toBeGreaterThan(minutesOf(base, 'structure_reading'))
+  })
+
+  it('速度が弱く理解が保てていれば Speed Push を増やす', () => {
+    const base = generateDailyPlan(input({ profile: profileOf({}) }))
+    const plan = generateDailyPlan(
+      input({ profile: profileOf({ reading_speed: weak(), comprehension: strong() }) }),
+    )
+    expect(minutesOf(plan, 'speed_push')).toBeGreaterThan(minutesOf(base, 'speed_push'))
+  })
+
+  it('想起が弱いとき、速度ではなく Recall を増やす', () => {
+    const base = generateDailyPlan(input({ profile: profileOf({}) }))
+    const plan = generateDailyPlan(
+      input({ profile: profileOf({ immediate_recall: weak(), reading_speed: weak() }) }),
+    )
+    expect(minutesOf(plan, 'immediate_recall')).toBeGreaterThan(minutesOf(base, 'immediate_recall'))
+    expect(minutesOf(plan, 'speed_push')).toBeLessThanOrEqual(minutesOf(base, 'speed_push'))
+  })
+
+  it('弱点を判定理由に残す', () => {
+    const plan = generateDailyPlan(
+      input({ profile: profileOf({ structure_recognition: weak() }) }),
+    )
+    expect(plan.generatedReason?.weakestSkills).toContain('structure_recognition')
+    expect(plan.generatedReason?.notes.join()).toContain('Structure Reading')
+  })
+
+  it('測定のために入れたスキルを記録する', () => {
+    const plan = generateDailyPlan(input({ profile: profileOf() }))
+    expect(plan.generatedReason?.measuredForFirstTime?.length).toBeGreaterThan(0)
+  })
+})
+
+describe('generateDailyPlan: 教材の割り当て', () => {
+  it('Speed Push / Chunk / Structure に別々の教材を割り当てる', () => {
+    const plan = generateDailyPlan(
+      input({ profile: profileOf({ chunk_recognition: weak() }) }),
+    )
+    const ids = ['speed_push', 'chunk_reading', 'structure_reading']
+      .map((type) => plan.blocks.find((b) => b.type === type)?.passageId)
+      .filter(Boolean)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('Comprehension と Immediate Recall は Structure と同じ教材を使う', () => {
+    const plan = generateDailyPlan(input())
+    const structureId = plan.blocks.find((b) => b.type === 'structure_reading')?.passageId
+    expect(plan.blocks.find((b) => b.type === 'comprehension')?.passageId).toBe(structureId)
+    expect(plan.blocks.find((b) => b.type === 'immediate_recall')?.passageId).toBe(structureId)
+  })
+
+  it('Prediction には停止位置を持つ教材だけを割り当てる', () => {
+    const plan = generateDailyPlan(input({ profile: profileOf({ prediction: weak() }) }))
+    const id = plan.blocks.find((b) => b.type === 'prediction_reading')?.passageId
+    expect(PASSAGES.find((p) => p.id === id)?.supportsPrediction).toBe(true)
+  })
+
+  it('Variable Speed には区間定義を持つ教材だけを割り当てる', () => {
+    const plan = generateDailyPlan(input({ profile: profileOf({ adaptive_reading: weak() }) }))
+    const id = plan.blocks.find((b) => b.type === 'variable_speed')?.passageId
+    expect(PASSAGES.find((p) => p.id === id)?.supportsVariableSpeed).toBe(true)
+  })
+
+  it('対応教材がなければそのトレーニングを選ばない', () => {
+    const plan = generateDailyPlan(
+      input({
+        profile: profileOf({ adaptive_reading: weak() }),
+        passages: PASSAGES.map((p) => ({ ...p, supportsVariableSpeed: false })),
+      }),
+    )
+    expect(plan.blocks.map((b) => b.type)).not.toContain('variable_speed')
+    expect(trainingMinutes(plan)).toBe(30)
+  })
+
+  it('直近で使った教材を避ける', () => {
+    const first = generateDailyPlan(input())
+    const used = first.blocks.flatMap((b) => (b.passageId ? [b.passageId] : []))
+    const next = generateDailyPlan(input({ recentPassageIds: used }))
+    const nextUsed = next.blocks.flatMap((b) => (b.passageId ? [b.passageId] : []))
+    expect(nextUsed.some((id) => used.includes(id))).toBe(false)
+  })
+
+  it('教材が少なくても落ちない', () => {
+    const plan = generateDailyPlan(input({ passages: PASSAGES.slice(0, 1) }))
+    expect(plan.blocks.length).toBeGreaterThan(0)
+  })
+})
+
+describe('generateDailyPlan: 翌日 Recall', () => {
+  it('実施待ちがあれば先頭に差し込む', () => {
+    const plan = generateDailyPlan(input({ dueRecallCount: 1 }))
+    expect(plan.blocks[0]?.type).toBe('delayed_recall')
+  })
+
+  it('差し込んでも本編の合計時間は変わらない', () => {
+    expect(trainingMinutes(generateDailyPlan(input({ dueRecallCount: 2 })))).toBe(30)
+  })
+})
+
+describe('generateDailyPlan: レベルと速度の受け渡し', () => {
+  it('目標速度とレベルをブロックに渡す', () => {
+    const plan = generateDailyPlan(
+      input({
+        targetCpm: 800,
+        chunkLevel: 4,
+        meaningFlashLevel: 3,
+        profile: profileOf({ chunk_recognition: weak(), meaning_extraction: weak() }),
+      }),
+    )
+    expect(plan.blocks.find((b) => b.type === 'speed_push')?.targetCpm).toBe(800)
+    expect(plan.blocks.find((b) => b.type === 'chunk_reading')?.chunkLevel).toBe(4)
+    expect(plan.blocks.find((b) => b.type === 'meaning_flash')?.chunkLevel).toBe(3)
   })
 })

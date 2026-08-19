@@ -1,46 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { toLocalDate } from '../types/common'
 import type { ReadingTest, RecallTask, TrainingResult, TrainingSession } from '../types/training'
+import { makeResult, makeReadingTest } from '../__tests__/fixtures'
 import { summarizeStats, type StatsSource } from './dashboard-stats'
 
 const d = (value: string) => toLocalDate(value)
 const TODAY = d('2026-08-19')
 
-const result = (overrides: Partial<TrainingResult> & { createdAt: string }): TrainingResult => ({
-  id: `r-${overrides.createdAt}`,
-  userId: 'u',
-  sessionId: 's',
-  trainingType: 'speed_push',
-  passageId: 'p',
-  cpm: null,
-  comprehensionScore: null,
-  immediateRecallScore: null,
-  delayedRecallScore: null,
-  targetCpm: null,
-  backCount: null,
-  pauseCount: null,
-  chunkLevel: null,
-  difficulty: null,
-  valid: true,
-  ...overrides,
-})
 
-const readingTest = (
-  overrides: Partial<ReadingTest> & { createdAt: string },
-): ReadingTest => ({
-  id: `t-${overrides.createdAt}`,
-  userId: 'u',
-  sessionId: 's',
-  passageId: 'gen-006',
-  isBaseline: true,
-  elapsedSeconds: 90,
-  characterCount: 888,
-  cpm: 592,
-  comprehensionScore: 80,
-  recallScore: 75,
-  recallText: null,
-  ...overrides,
-})
+const readingTest = (overrides: Partial<ReadingTest> & { createdAt: string }): ReadingTest =>
+  makeReadingTest({ passageId: 'gen-006', elapsedSeconds: 90, characterCount: 888, cpm: 592, ...overrides })
+
+const result = (overrides: Partial<TrainingResult> & { createdAt: string }): TrainingResult =>
+  makeResult(overrides)
 
 const session = (localDate: string, completed = true): TrainingSession => ({
   id: `s-${localDate}`,

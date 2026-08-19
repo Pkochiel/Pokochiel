@@ -1,4 +1,5 @@
 import type {
+  BaselineProfile,
   ChunkLevel,
   DailyTrainingPlan,
   Difficulty,
@@ -7,6 +8,7 @@ import type {
   Profile,
   ReadingTest,
   RecallTask,
+  QuestionType,
   SessionType,
   TrainingResult,
   TrainingSession,
@@ -21,6 +23,8 @@ export interface ProfileInput {
   chunkLevel?: ChunkLevel
   timezone?: string
   onboardedAt?: string | null
+  baselineProfile?: BaselineProfile | null
+  usedBaselinePassageIds?: string[]
 }
 
 export interface SessionInput {
@@ -40,7 +44,9 @@ export interface TrainingResultInput {
   targetCpm?: number | null
   backCount?: number | null
   pauseCount?: number | null
-  chunkLevel?: ChunkLevel | null
+  level?: ChunkLevel | null
+  accuracyScore?: number | null
+  exposureMs?: number | null
   difficulty?: Difficulty | null
   valid?: boolean
 }
@@ -55,6 +61,7 @@ export interface ReadingTestInput {
   comprehensionScore: number | null
   recallScore: number | null
   recallText: string | null
+  typeScores?: Partial<Record<QuestionType, number>> | null
 }
 
 export interface RecallTaskInput {

@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { toLocalDate } from '../types/common'
 import type { ReadingTest, RecallTask, TrainingResult, TrainingSession } from '../types/training'
+import { makeReadingTest, makeRecallTask, makeResult } from '../__tests__/fixtures'
 import { buildProgressSeries, presentPoints, type ProgressSeriesInput } from './progress-series'
 
 const d = (v: string) => toLocalDate(v)
 const TZ = 'Asia/Tokyo'
+
+const result = (sessionId: string, overrides: Partial<TrainingResult> = {}): TrainingResult =>
+  makeResult({ sessionId, ...overrides })
 
 const session = (id: string, localDate: string): TrainingSession => ({
   id,
@@ -16,28 +20,6 @@ const session = (id: string, localDate: string): TrainingSession => ({
   localDate: d(localDate),
 })
 
-const result = (
-  sessionId: string,
-  overrides: Partial<TrainingResult> = {},
-): TrainingResult => ({
-  id: Math.random().toString(),
-  userId: 'u',
-  sessionId,
-  trainingType: 'speed_push',
-  passageId: 'p',
-  cpm: null,
-  comprehensionScore: null,
-  immediateRecallScore: null,
-  delayedRecallScore: null,
-  targetCpm: null,
-  backCount: null,
-  pauseCount: null,
-  chunkLevel: null,
-  difficulty: null,
-  valid: true,
-  createdAt: '2026-08-19T09:00:00Z',
-  ...overrides,
-})
 
 const input = (overrides: Partial<ProgressSeriesInput> = {}): ProgressSeriesInput => ({
   results: [],
@@ -106,20 +88,14 @@ describe('buildProgressSeries', () => {
   })
 
   it('Baseline の測定も同じ系列に含める', () => {
-    const test: ReadingTest = {
-      id: 't1',
-      userId: 'u',
+    const test = makeReadingTest({
       sessionId: null,
       passageId: 'gen-006',
-      isBaseline: true,
       elapsedSeconds: 90,
       characterCount: 888,
       cpm: 592,
-      comprehensionScore: 80,
-      recallScore: 75,
-      recallText: null,
       createdAt: '2026-08-17T09:00:00Z',
-    }
+    })
     const series = buildProgressSeries(input({ readingTests: [test] }))
     expect(series.cpm[4]?.value).toBe(592)
     expect(series.comprehension[4]?.value).toBe(80)
@@ -127,37 +103,20 @@ describe('buildProgressSeries', () => {
   })
 
   it('翌日 Recall は完了した日に記録する', () => {
-    const task: RecallTask = {
-      id: 'r1',
-      userId: 'u',
-      passageId: 'p',
-      sourceSessionId: null,
+    const task = makeRecallTask({
       scheduledDate: d('2026-08-18'),
       expiresOn: d('2026-08-21'),
       completedAt: '2026-08-18T10:00:00Z',
       recallScore: 50,
-      recallText: null,
       status: 'completed',
       createdAt: '2026-08-17T09:00:00Z',
-    }
+    })
     const series = buildProgressSeries(input({ recallTasks: [task] }))
     expect(series.delayedRecall[5]?.value).toBe(50)
   })
 
   it('未完了の Recall は含めない', () => {
-    const task: RecallTask = {
-      id: 'r1',
-      userId: 'u',
-      passageId: 'p',
-      sourceSessionId: null,
-      scheduledDate: d('2026-08-19'),
-      expiresOn: d('2026-08-22'),
-      completedAt: null,
-      recallScore: null,
-      recallText: null,
-      status: 'pending',
-      createdAt: '2026-08-18T09:00:00Z',
-    }
+    const task = makeRecallTask({ createdAt: '2026-08-18T09:00:00Z' })
     const series = buildProgressSeries(input({ recallTasks: [task] }))
     expect(presentPoints(series.delayedRecall)).toHaveLength(0)
   })

@@ -1,4 +1,5 @@
 import type { ChunkLevel, Difficulty, LocalDate } from './common'
+import type { QuestionType } from './passage'
 
 export type TrainingType =
   | 'warmup'
@@ -41,8 +42,21 @@ export interface TrainingResult {
   targetCpm: number | null
   backCount: number | null
   pauseCount: number | null
-  chunkLevel: ChunkLevel | null
+  /**
+   * そのトレーニングのレベル（Chunk Reading / Meaning Flash など）。
+   * 旧データの chunkLevel はここへ移送される。
+   */
+  level: ChunkLevel | null
   difficulty: Difficulty | null
+  /**
+   * そのトレーニング固有の正答率・一致率（0–100）。
+   * Meaning Flash の意味把握、Prediction の予測妥当性、
+   * Variable Speed の推奨速度との一致率がここに入る。
+   * 「文章の理解度」を表す comprehensionScore とは別物として扱う。
+   */
+  accuracyScore: number | null
+  /** Meaning Flash の1件あたり表示時間（ms） */
+  exposureMs: number | null
   /** 計測として有効か。false の結果は統計・適応計算から除外する。 */
   valid: boolean
   createdAt: string
@@ -60,6 +74,11 @@ export interface ReadingTest {
   comprehensionScore: number | null
   recallScore: number | null
   recallText: string | null
+  /**
+   * 設問タイプ別の正答率（0–100）。
+   * Baseline Profile の Main Idea / Cause & Effect / Structure はここから作る。
+   */
+  typeScores: Partial<Record<QuestionType, number>> | null
   createdAt: string
 }
 
