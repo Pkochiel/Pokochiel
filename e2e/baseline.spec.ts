@@ -1,4 +1,24 @@
 import { expect, test, type Page } from '@playwright/test'
+import { readCollection, readProfile, waitForProfile, waitForRecords } from './helpers/storage'
+
+interface StoredProfile {
+  usedBaselinePassageIds: string[]
+  baselineCpm: number | null
+  targetCpm: number | null
+  baselineProfile: {
+    mainIdea: number | null
+    causeEffect: number | null
+    structure: number | null
+    immediateRecall: number | null
+    attempts: number
+  } | null
+}
+
+interface StoredReadingTest {
+  passageId: string
+  cpm: number
+  comprehensionScore: number | null
+}
 
 /**
  * Baseline 教材は 1,100〜1,300 字。CPM が現実的な範囲（maxPlausibleCpm = 6000）に
@@ -45,11 +65,12 @@ test('Baseline Test を完走し、理解の内訳まで保存される', async 
   await expect(page.getByText('主張の把握')).toBeVisible()
   await expect(page.getByText('保存していません')).toHaveCount(0)
 
-  const stored = await page.evaluate(() => ({
-    profile: JSON.parse(window.localStorage.getItem('srl:v1:profile') ?? 'null'),
-    readingTests: JSON.parse(window.localStorage.getItem('srl:v1:reading_tests') ?? '[]'),
-    recallTasks: JSON.parse(window.localStorage.getItem('srl:v1:recall_tasks') ?? '[]'),
-  }))
+  await waitForRecords(page, 'readingTests')
+  const stored = {
+    profile: await waitForProfile<StoredProfile>(page, (p) => p.baselineCpm !== null),
+    readingTests: await readCollection<StoredReadingTest>(page, 'readingTests'),
+    recallTasks: await readCollection(page, 'recallTasks'),
+  }
 
   expect(stored.profile.baselineCpm).toBeGreaterThan(0)
   expect(stored.profile.targetCpm).toBeGreaterThan(stored.profile.baselineCpm)
@@ -81,9 +102,10 @@ test('2回目の Baseline では別の教材が出る', async ({ page }) => {
   await completeBaseline(page)
   await expect(page.getByRole('heading', { name: '現在地を測定しました' })).toBeVisible()
 
-  const firstPassage = await page.evaluate(
-    () => JSON.parse(window.localStorage.getItem('srl:v1:reading_tests') ?? '[]')[0].passageId,
-  )
+  const [firstTest] = await waitForRecords(page, 'readingTests')
+  const firstPassage = firstTest!.passageId
+  // 教材の出し分けは Profile の記録に依存する。書き終わる前に遷移しない。
+  await waitForProfile<StoredProfile>(page, (p) => p.usedBaselinePassageIds.length === 1)
 
   await page.goto('/baseline/read')
   await expect(page.getByText(/Baseline Test・2 回目/)).toBeVisible()
@@ -100,10 +122,11 @@ test('2回目の Baseline では別の教材が出る', async ({ page }) => {
   await page.getByRole('button', { name: '50%' }).click()
   await page.getByRole('button', { name: '次へ' }).click()
 
-  const stored = await page.evaluate(() => ({
-    tests: JSON.parse(window.localStorage.getItem('srl:v1:reading_tests') ?? '[]'),
-    profile: JSON.parse(window.localStorage.getItem('srl:v1:profile') ?? 'null'),
-  }))
+  await waitForRecords(page, 'readingTests', 2)
+  const stored = {
+    tests: await readCollection<StoredReadingTest>(page, 'readingTests'),
+    profile: await waitForProfile<StoredProfile>(page, (p) => p.usedBaselinePassageIds.length === 2),
+  }
 
   expect(stored.tests).toHaveLength(2)
   expect(stored.tests[1].passageId).not.toBe(firstPassage)
@@ -127,10 +150,8 @@ test('飛ばし読みは基準値として保存されない', async ({ page }) 
 
   await expect(page.getByText('保存していません')).toBeVisible()
 
-  const profile = await page.evaluate(() =>
-    JSON.parse(window.localStorage.getItem('srl:v1:profile') ?? 'null'),
-  )
-  expect(profile.baselineCpm).toBeNull()
+  const profile = await readProfile<StoredProfile>(page)
+  expect(profile?.baselineCpm ?? null).toBeNull()
 })
 
 test('読了せずに設問へ進めない', async ({ page }) => {

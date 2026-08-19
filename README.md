@@ -9,11 +9,14 @@
 
 ## ステータス
 
-**Phase 1（MVP）+ Phase 1.5（Training Core Enhancement）完了。**
+**Phase 1（MVP）/ Phase 1.5（Training Core Enhancement）/ Phase 2（Local First）完了。**
 
 Baseline Test → Daily Training → 翌日 Recall → Progress まで一連で完了でき、
 9つの認知能力（Skill Profile）を独立に測定して、その日の構成を自動で決める。
-データは端末内（localStorage）に保存される。永続化・認証・PWA・AI は未着手。
+
+**アカウント登録もインターネット接続も要らない。** 記録は端末内の IndexedDB にだけ保存され、
+オフラインでも起動・トレーニング・保存・翌日 Recall がそのまま動く。
+端末外へ出したいときは Settings から JSON で書き出す。Auth・クラウド同期・AI は未実装。
 
 **鍛えるトレーニング**
 
@@ -29,13 +32,25 @@ Baseline Test → Daily Training → 翌日 Recall → Progress まで一連で�
 | Comprehension Test | Comprehension |
 | Immediate / Next-day Recall | Immediate / Delayed Recall |
 
+## データの扱い
+
+| | |
+|---|---|
+| 保存先 | 端末内の IndexedDB（使えない環境では localStorage に退避） |
+| 送信 | しない。サーバーへ記録を送る経路が存在しない |
+| 移行 | Phase 1 の `srl:v1:*`（localStorage）は初回起動時に自動で移送し、旧キーを削除する |
+| 持ち出し | Settings → 「JSON を書き出す」／「バックアップから復元」 |
+| 消去 | ブラウザのサイトデータ削除で完全に消える（バックアップを取ってから行う） |
+
 ## 開発
 
 ```bash
 npm install
-npm run dev      # 開発サーバ
+npm run dev      # 開発サーバ（Service Worker は登録しない）
 npm run check    # typecheck + lint + unit test
 npm run e2e      # Playwright（build & start を含む）
+
+node scripts/generate-icons.mjs   # PWA アイコンを作り直す
 ```
 
 ## ドキュメント
@@ -43,16 +58,18 @@ npm run e2e      # Playwright（build & start を含む）
 | ドキュメント | 内容 |
 |---|---|
 | [docs/PRODUCT.md](docs/PRODUCT.md) | コンセプト・非目標・指標・MVP スコープ・DoD |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 技術スタック・レイヤリング・ディレクトリ構造・永続化の抽象化 |
-| [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | ドメイン型・PostgreSQL スキーマ・RLS・localStorage スキーマ |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 技術スタック・レイヤリング・永続化（Local First）・PWA |
+| [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | ドメイン型・IndexedDB / localStorage スキーマ・移送・Backup 形式 |
 | [docs/TRAINING_LOGIC.md](docs/TRAINING_LOGIC.md) | CPM / ERS / 速度適応 / プラン生成 / Recall スケジューリング / チャンク分割 |
 | [docs/METRICS.md](docs/METRICS.md) | CPM / Comprehension / Recall / Skill Profile / ERS / 有効・無効判定の定義 |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Step 1–15 の実装順と各 Step の完了条件 |
 
-## 技術スタック（予定）
+## 技術スタック
 
 Next.js 16 (App Router) / React 19 / TypeScript strict / Tailwind CSS v4 /
-Supabase (PostgreSQL・Auth・RLS) / Vitest / Playwright / PWA
+IndexedDB / Service Worker (PWA) / zod / Vitest / Playwright
+
+クラウド同期（Supabase）は将来の任意機能。足す場合も、同期が無い状態で全機能が動くことは変えない。
 
 ## 注意
 

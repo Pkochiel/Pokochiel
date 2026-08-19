@@ -147,7 +147,11 @@ export interface BaselineProfile {
 }
 ```
 
-## 2. テーブル一覧
+## 2. テーブル一覧（将来の同期用・現時点では未実装）
+
+> §2・§3・§5 は、将来クラウド同期を足すときのための設計。
+> **現在の保存先は端末内の IndexedDB のみで、Supabase も Auth も実装していない（§6）。**
+> 同期を足す場合も、クラウドが無い状態で全機能が動くことを壊さない。
 
 | テーブル | 種別 | 概要 |
 |---|---|---|
@@ -354,12 +358,34 @@ create policy "read questions of readable passages" on public.training_questions
 - `updated_at` は `moddatetime` トリガーで更新する。
 - seed 投入は service_role キーを使う `supabase/seed.sql`（`scripts/generate-seed-sql.ts` が生成）。
 
-## 6. localStorage スキーマ（Phase 1）
+## 6. ローカル保存（Phase 2 — Local First）
 
-キーは `srl:v1:<entity>`。読み出し時に zod で検証し、壊れていれば破棄して初期化する（クラッシュさせない）。
+記録は端末内にだけ保存される。アカウントもサーバーも要らない。
+
+### 6-1. IndexedDB（既定の保存先）
+
+データベース名 `speed-reading-lab` / version 1。object store は collection と 1 対 1、
+`keyPath` は `id`。索引は作らず、全件取得して呼び出し側で絞る（個人の学習記録の規模で足りる）。
+
+| object store | 内容 | 件数の目安 |
+|---|---|---|
+| `profile` | Profile（1 件のみ。id は `local-user`） | 1 |
+| `sessions` | TrainingSession | 1 日 1〜数件 |
+| `results` | TrainingResult | 1 セッションあたり 5〜10 件 |
+| `readingTests` | ReadingTest（Baseline） | 数件 |
+| `recallTasks` | RecallTask | 1 日 0〜数件 |
+| `plans` | DailyTrainingPlan（1 日 1 件） | 1 日 1 件 |
+
+読み出しは `TrainingRepository` が zod で検証し、スキーマに合わない行は捨てる。
+**返す順序は `createdAt` 昇順**に揃える（IndexedDB は id 順で返すため。
+trend 判定・直近 N 件・最新 Baseline が並び順に意味を持たせている）。
+
+### 6-2. localStorage（Phase 1 の形式・現在は代替保存先）
+
+キーは `srl:v1:<entity>`。IndexedDB が使えない環境ではこの形式のまま動く。
 
 ```
-srl:v1:profile        Profile
+srl:v1:profile        Profile        （単体オブジェクト）
 srl:v1:sessions       TrainingSession[]
 srl:v1:results        TrainingResult[]
 srl:v1:reading_tests  ReadingTest[]
@@ -367,7 +393,15 @@ srl:v1:recall_tasks   RecallTask[]
 srl:v1:plans          DailyTrainingPlan[]
 ```
 
-### 後方互換の扱い
+### 6-3. 移送（Phase 1 → Phase 2）
+
+起動時に一度だけ、`srl:v1:*` の中身を IndexedDB へ移す。
+
+- **移動であって複製ではない。** 取り込み後に旧キーを削除し、正となる保存先を 1 つに保つ。
+- id 単位の upsert。途中で中断されても、次の起動で残りをやり直せる。
+- 壊れた JSON・`id` を持たない行は落とす。移送の失敗で起動できなくなることはない。
+
+### 6-4. 後方互換の扱い
 
 フィールドを追加するときはキーを上げず、**読み出し時に既定値を与える**。
 端末に残っている記録を捨てないためであり、実際に次の移送を行っている。
@@ -382,3 +416,29 @@ srl:v1:plans          DailyTrainingPlan[]
 | （なし） | `reading_tests[].typeScores` | 既定値 `null` |
 
 スキーマに合わない行は破棄して初期化する（過去の壊れたデータでアプリが起動しなくなるのを避ける）。
+
+## 7. Backup ファイル形式
+
+Settings から書き出せる JSON。端末外へ記録を持ち出す唯一の経路。
+
+```jsonc
+{
+  "format": "speed-reading-lab.backup",
+  "version": 1,
+  "exportedAt": "2026-08-19T09:00:00.000Z",
+  "collections": {
+    "profile": [ /* Profile */ ],
+    "sessions": [ /* TrainingSession[] */ ],
+    "results": [ /* TrainingResult[] */ ],
+    "readingTests": [ /* ReadingTest[] */ ],
+    "recallTasks": [ /* RecallTask[] */ ],
+    "plans": [ /* DailyTrainingPlan[] */ ]
+  }
+}
+```
+
+- ファイル名は `speed-reading-lab-backup-YYYY-MM-DD.json`。
+- 復元は**置き換え**。取り込む前に全行を zod で検証し、通らなかった行は件数だけ報告して除外する。
+- `format` / `version` が一致しないファイルは受け付けず、既存データにも触らない。
+- 保存先の構造（object store 等）ではなく collection 単位の素の JSON なので、
+  将来保存先が変わっても読み込める。

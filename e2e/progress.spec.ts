@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { readProfile } from './helpers/storage'
 
 const DAYS = ['2026-08-17', '2026-08-18', '2026-08-19']
 
@@ -110,8 +111,6 @@ test('Settings で1日のトレーニング時間を変更できる', async ({ p
   await page.getByRole('button', { name: '20 分' }).click()
   await expect(page.getByText('保存しました。')).toBeVisible()
 
-  const stored = await page.evaluate(() =>
-    JSON.parse(window.localStorage.getItem('srl:v1:profile') ?? 'null'),
-  )
-  expect(stored.preferredDurationMinutes).toBe(20)
+  const stored = await readProfile<{ preferredDurationMinutes: number }>(page)
+  expect(stored?.preferredDurationMinutes).toBe(20)
 })

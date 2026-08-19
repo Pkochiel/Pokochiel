@@ -10,6 +10,11 @@ function isTrainingType(value: string): value is TrainingType {
   return (TRAINING_TYPES as readonly string[]).includes(value)
 }
 
+/** すべてのトレーニングを静的に出力する（オフラインでも開けるようにするため）。 */
+export function generateStaticParams(): { type: string }[] {
+  return TRAINING_TYPES.map((type) => ({ type }))
+}
+
 export async function generateMetadata({
   params,
 }: {

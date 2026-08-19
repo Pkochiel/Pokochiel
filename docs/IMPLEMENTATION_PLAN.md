@@ -70,33 +70,51 @@
 - チャートは自前 SVG。系列色は CVD 分離・明度帯・コントラストを検証したうえで light / dark 別に選定（`--chart-1` / `--chart-2`）
 - 色に頼らない代替として、各チャートに表形式の内訳を用意
 
-## Phase 2 — ユーザーデータ保存
+## Phase 1.5 — 適応型トレーニング ✅ 完了
 
-### Step 12: Supabase
-- `supabase/migrations/*.sql`（DATA_MODEL.md のスキーマ）、`scripts/generate-seed-sql.ts` で seed 生成
-- `SupabaseRepository` 実装（UI は無変更であることを確認）
-- RLS ポリシー適用と、他ユーザー行にアクセスできないことのテスト
-
-### Step 13: Authentication
-- `/login`、`@supabase/ssr` によるセッション、ミドルウェアで保護ルート
-- 初回ログイン時に `migrateLocalToRemote()` でローカル実績を移送
-
-## Phase 3 — 適応型トレーニング
-
-### Step 14: Adaptive Training（Phase 1 で先行実装済み）
+### Adaptive Training
 - `generateDailyPlan` を実データで駆動、10/20/30 分の切替 ✅
 - 弱点に応じた配分変更（Recall 低下時は速度を落とさず配分を変える）✅
 - 未実測の軸を弱点と誤認しない（新規ユーザーには標準構成）✅
 - 供出元はベース配分の半分を保持し、特定のトレーニングが消えないようにする ✅
 - 残り：`generated_reason` を Dashboard に短文で提示（Step 11 で対応）
 
-## Phase 5 — PWA
+## Phase 2 — Local First / Offline ✅ 完了
 
-### Step 15: PWA
-- `app/manifest.ts`、アイコン、Service Worker（教材と当日プランのオフラインキャッシュ）
-- スマホでの Reading Mode 最適化（下部3ボタン、セーフエリア、画面スリープ抑止の検討）
+目的：**インターネット接続・アカウント登録なしで、Training / Progress / Recall がすべて使える。**
+Auth と Supabase は入れない。クラウド同期が無い状態で全機能が完結することを要件とする。
 
-## Phase 4（Step 15 以降）— AI 機能
+### Step 12: 保存先の抽象化と IndexedDB ✅ 完了
+- `RecordStore` ポートを追加し、`TrainingRepository` の実装を保存技術から切り離した
+  （インタフェースは Phase 1 から無変更）
+- `IndexedDbRecordStore` / `LocalStorageRecordStore` / `MemoryRecordStore` が同じ契約テストを通る
+- IndexedDB が使えない環境では localStorage に退避し、トレーニングを止めない
+- 記録は `createdAt` 昇順で返す（保存先の並び順を指標に混ぜない）
+- **完了条件**：IndexedDB 固有処理が UI / Core / Repository に無いことをテストで固定 ✅
+
+### Step 13: 移送と Backup ✅ 完了
+- 起動時に `srl:v1:*` を IndexedDB へ移送し、旧キーを削除（移動であって複製ではない）
+- Settings から JSON Export / Import。復元は zod 検証を通してから置き換える
+- **完了条件**：Phase 1 のデータを持つ端末が、記録を失わずに Phase 2 で起動できる ✅
+
+### Step 14: PWA / オフライン起動 ✅ 完了
+- `app/manifest.ts` + アイコン生成（`scripts/generate-icons.mjs`・依存なし）
+- Service Worker：主要画面と、その HTML が参照する JS / CSS を install 時に取り込む
+- トレーニング画面を `generateStaticParams` で静的出力
+- **完了条件**：ネットワークを切った状態で起動・保存・翌日 Recall ができる ✅
+  （`e2e/offline.spec.ts`）
+
+## Phase 3 — Supabase Sync（任意機能）
+
+同期は「あると便利」であって、必須にはしない。ローカルへの書き込みを先に確定させ、
+同期は後追いにする。差し込み位置は `RecordStore` のデコレータ 1 箇所（ARCHITECTURE.md §4-3）。
+
+### Step 15: Sync Engine
+- `SyncingRecordStore`（ローカル確定 → 変更を積む → 接続時に送る）
+- 競合解決の方針（更新時刻の新しい方を採る／記録は削除しない）
+- **完了条件**：同期を無効にしても全機能が変わらず動く
+
+## Phase 4 — AI 機能
 
 MVP 完成後に着手する。インタフェースは先に用意済み。
 

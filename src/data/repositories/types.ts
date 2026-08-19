@@ -83,8 +83,9 @@ export interface ResultQuery {
 /**
  * 永続化の境界。
  *
- * Phase 1 は LocalStorageRepository、Phase 2 で SupabaseRepository に差し替える。
- * UI はこのインタフェースだけに依存するため、差し替えで画面側の変更は発生しない。
+ * UI はこのインタフェースだけに依存する。保存先（Phase 1: localStorage →
+ * Phase 2: IndexedDB、将来: Supabase Sync）が変わっても、このシグネチャは変えない。
+ * すべて Promise を返すのは、同期前提の実装に UI が引きずられないようにするため。
  */
 export interface TrainingRepository {
   getProfile(): Promise<Profile | null>

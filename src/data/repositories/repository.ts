@@ -11,6 +11,11 @@ import type {
 } from '@/core/types'
 import { compareLocalDate, isSameOrBefore } from '@/core/util/date'
 import { CHUNKING, MEANING_FLASH } from '@/core/config/training-config'
+import {
+  clearAllCollections,
+  type CollectionName,
+  type RecordStore,
+} from '@/data/persistence/record-store'
 import type {
   ProfileInput,
   ReadingTestInput,
@@ -28,57 +33,64 @@ import {
   resultSchema,
   sessionSchema,
 } from './schema'
-import type { KeyValueStorage } from './storage'
 
-const SCHEMA_VERSION = 1
-const PREFIX = `srl:v${SCHEMA_VERSION}`
-
-const KEYS = {
-  profile: `${PREFIX}:profile`,
-  sessions: `${PREFIX}:sessions`,
-  results: `${PREFIX}:results`,
-  readingTests: `${PREFIX}:reading_tests`,
-  recallTasks: `${PREFIX}:recall_tasks`,
-  plans: `${PREFIX}:plans`,
-} as const
-
-/** Phase 1 は単一ユーザー。Phase 2 で auth.uid() に置き換わる。 */
+/** アカウント登録を伴わない Local First 構成での固定 ID。 */
 export const LOCAL_USER_ID = 'local-user'
 
-export interface LocalStorageRepositoryDeps {
-  storage: KeyValueStorage
+/**
+ * 記録は必ず時系列で返す。
+ *
+ * RecordStore は順序を保証しない（IndexedDB は id 順、localStorage は追記順）。
+ * 一方で trend 判定・直近 N 件・最新の Baseline は並び順に意味を持たせているため、
+ * 保存先の都合が指標に混ざらないようこの層で整列する。
+ */
+function chronologically<T extends { id: string; createdAt: string }>(rows: T[]): T[] {
+  return [...rows].sort(
+    (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+  )
+}
+
+export interface RecordStoreRepositoryDeps {
+  store: RecordStore
   /** 現在時刻。テストでは固定値を注入する。 */
   now: () => Date
   createId: () => string
   defaultTimezone?: string
 }
 
-export class LocalStorageRepository implements TrainingRepository {
-  constructor(private readonly deps: LocalStorageRepositoryDeps) {}
+/**
+ * TrainingRepository の実装。
+ *
+ * 保存先は RecordStore 越しにしか触らないため、IndexedDB か localStorage かを
+ * このクラスは知らない（差し替えても、ここと UI は変わらない）。
+ * ドメイン規則（既定値・重複排除・期限切れの扱い）はこの層に閉じる。
+ */
+export class RecordStoreRepository implements TrainingRepository {
+  constructor(private readonly deps: RecordStoreRepositoryDeps) {}
 
   // ---- 低レベル入出力 -------------------------------------------------
 
   /**
-   * 保存済みデータを読み出す。壊れていれば捨てて初期値に戻す。
+   * 保存済みデータを読み出す。スキーマに合わない行は捨てる。
    * 過去の不正なデータでアプリが起動しなくなる事態を避けるため、例外は投げない。
    */
-  private readList<T>(key: string, schema: z.ZodType<T>): T[] {
-    const raw = this.deps.storage.getItem(key)
-    if (!raw) return []
-    try {
-      const parsed: unknown = JSON.parse(raw)
-      if (!Array.isArray(parsed)) return []
-      return parsed.flatMap((item) => {
-        const result = schema.safeParse(item)
-        return result.success ? [result.data] : []
-      })
-    } catch {
-      return []
-    }
+  private async readAll<T>(collection: CollectionName, schema: z.ZodType<T>): Promise<T[]> {
+    const rows = await this.deps.store.list(collection)
+    return rows.flatMap((row) => {
+      const result = schema.safeParse(row)
+      return result.success ? [result.data] : []
+    })
   }
 
-  private writeList<T>(key: string, items: readonly T[]): void {
-    this.deps.storage.setItem(key, JSON.stringify(items))
+  private async readOne<T>(
+    collection: CollectionName,
+    id: string,
+    schema: z.ZodType<T>,
+  ): Promise<T | null> {
+    const row = await this.deps.store.get(collection, id)
+    if (row === null) return null
+    const result = schema.safeParse(row)
+    return result.success ? result.data : null
   }
 
   private nowIso(): string {
@@ -88,14 +100,8 @@ export class LocalStorageRepository implements TrainingRepository {
   // ---- Profile --------------------------------------------------------
 
   async getProfile(): Promise<Profile | null> {
-    const raw = this.deps.storage.getItem(KEYS.profile)
-    if (!raw) return null
-    try {
-      const result = profileSchema.safeParse(JSON.parse(raw))
-      return result.success ? result.data : null
-    } catch {
-      return null
-    }
+    const profiles = (await this.readAll('profile', profileSchema)) as Profile[]
+    return profiles[0] ?? null
   }
 
   async saveProfile(input: ProfileInput): Promise<Profile> {
@@ -112,14 +118,13 @@ export class LocalStorageRepository implements TrainingRepository {
       meaningFlashLevel:
         input.meaningFlashLevel ?? existing?.meaningFlashLevel ?? MEANING_FLASH.defaultLevel,
       baselineProfile: input.baselineProfile ?? existing?.baselineProfile ?? null,
-      usedBaselinePassageIds:
-        input.usedBaselinePassageIds ?? existing?.usedBaselinePassageIds ?? [],
+      usedBaselinePassageIds: input.usedBaselinePassageIds ?? existing?.usedBaselinePassageIds ?? [],
       timezone: input.timezone ?? existing?.timezone ?? this.deps.defaultTimezone ?? 'Asia/Tokyo',
       onboardedAt: input.onboardedAt ?? existing?.onboardedAt ?? null,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     }
-    this.deps.storage.setItem(KEYS.profile, JSON.stringify(profile))
+    await this.deps.store.put('profile', profile)
     return profile
   }
 
@@ -135,21 +140,22 @@ export class LocalStorageRepository implements TrainingRepository {
       sessionType: input.sessionType,
       localDate: input.localDate,
     }
-    const sessions = this.readList(KEYS.sessions, sessionSchema) as TrainingSession[]
-    this.writeList(KEYS.sessions, [...sessions, session])
+    await this.deps.store.put('sessions', session)
     return session
   }
 
   async completeSession(id: string, completedAt: string, durationSeconds: number): Promise<void> {
-    const sessions = this.readList(KEYS.sessions, sessionSchema) as TrainingSession[]
-    this.writeList(
-      KEYS.sessions,
-      sessions.map((s) => (s.id === id ? { ...s, completedAt, durationSeconds } : s)),
-    )
+    const session = (await this.readOne('sessions', id, sessionSchema)) as TrainingSession | null
+    if (!session) return
+    const updated: TrainingSession = { ...session, completedAt, durationSeconds }
+    await this.deps.store.put('sessions', updated)
   }
 
   async listSessions(): Promise<TrainingSession[]> {
-    return this.readList(KEYS.sessions, sessionSchema) as TrainingSession[]
+    const sessions = (await this.readAll('sessions', sessionSchema)) as TrainingSession[]
+    return [...sessions].sort(
+      (a, b) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id),
+    )
   }
 
   // ---- Results --------------------------------------------------------
@@ -175,8 +181,7 @@ export class LocalStorageRepository implements TrainingRepository {
       valid: input.valid ?? true,
       createdAt: this.nowIso(),
     }
-    const results = this.readList(KEYS.results, resultSchema) as TrainingResult[]
-    this.writeList(KEYS.results, [...results, result])
+    await this.deps.store.put('results', result)
     return result
   }
 
@@ -194,7 +199,7 @@ export class LocalStorageRepository implements TrainingRepository {
     const sessions = await this.listSessions()
     const dateBySession = new Map(sessions.map((s) => [s.id, s.localDate]))
 
-    return (this.readList(KEYS.results, resultSchema) as TrainingResult[])
+    return chronologically((await this.readAll('results', resultSchema)) as TrainingResult[])
       .map((row) => this.migrateResult(row))
       .filter((result) => {
         if (validOnly && !result.valid) return false
@@ -217,19 +222,18 @@ export class LocalStorageRepository implements TrainingRepository {
       typeScores: input.typeScores ?? null,
       createdAt: this.nowIso(),
     }
-    const tests = this.readList(KEYS.readingTests, readingTestSchema) as ReadingTest[]
-    this.writeList(KEYS.readingTests, [...tests, test])
+    await this.deps.store.put('readingTests', test)
     return test
   }
 
   async listReadingTests(): Promise<ReadingTest[]> {
-    return this.readList(KEYS.readingTests, readingTestSchema) as ReadingTest[]
+    return chronologically((await this.readAll('readingTests', readingTestSchema)) as ReadingTest[])
   }
 
   // ---- Recall tasks ---------------------------------------------------
 
   async scheduleRecallTasks(inputs: readonly RecallTaskInput[]): Promise<RecallTask[]> {
-    const existing = this.readList(KEYS.recallTasks, recallTaskSchema) as RecallTask[]
+    const existing = await this.listRecallTasks()
     const key = (t: { passageId: string; scheduledDate: LocalDate }) =>
       `${t.passageId}@${t.scheduledDate}`
     const seen = new Set(existing.map(key))
@@ -253,12 +257,12 @@ export class LocalStorageRepository implements TrainingRepository {
         createdAt: this.nowIso(),
       })
     }
-    if (created.length > 0) this.writeList(KEYS.recallTasks, [...existing, ...created])
+    if (created.length > 0) await this.deps.store.putMany('recallTasks', created)
     return created
   }
 
   async listRecallTasks(): Promise<RecallTask[]> {
-    return this.readList(KEYS.recallTasks, recallTaskSchema) as RecallTask[]
+    return chronologically((await this.readAll('recallTasks', recallTaskSchema)) as RecallTask[])
   }
 
   /**
@@ -268,20 +272,19 @@ export class LocalStorageRepository implements TrainingRepository {
    */
   async listDueRecallTasks(today: LocalDate): Promise<RecallTask[]> {
     const tasks = await this.listRecallTasks()
-    let mutated = false
+    const expired = tasks.flatMap((task): RecallTask[] =>
+      task.status === 'pending' && compareLocalDate(task.expiresOn, today) < 0
+        ? [{ ...task, status: 'expired' }]
+        : [],
+    )
+    if (expired.length > 0) await this.deps.store.putMany('recallTasks', expired)
 
-    const updated = tasks.map((task) => {
-      if (task.status !== 'pending') return task
-      if (compareLocalDate(task.expiresOn, today) < 0) {
-        mutated = true
-        return { ...task, status: 'expired' as const }
-      }
-      return task
-    })
-    if (mutated) this.writeList(KEYS.recallTasks, updated)
-
-    return updated
-      .filter((t) => t.status === 'pending' && isSameOrBefore(t.scheduledDate, today))
+    const expiredIds = new Set(expired.map((task) => task.id))
+    return tasks
+      .filter(
+        (t) =>
+          t.status === 'pending' && !expiredIds.has(t.id) && isSameOrBefore(t.scheduledDate, today),
+      )
       .sort((a, b) => compareLocalDate(a.scheduledDate, b.scheduledDate))
   }
 
@@ -289,40 +292,43 @@ export class LocalStorageRepository implements TrainingRepository {
     id: string,
     result: { recallScore: number; recallText: string; completedAt: string },
   ): Promise<void> {
-    const tasks = await this.listRecallTasks()
-    this.writeList(
-      KEYS.recallTasks,
-      tasks.map((task) =>
-        task.id === id
-          ? {
-              ...task,
-              status: 'completed' as const,
-              recallScore: result.recallScore,
-              recallText: result.recallText,
-              completedAt: result.completedAt,
-            }
-          : task,
-      ),
-    )
+    const task = (await this.readOne('recallTasks', id, recallTaskSchema)) as RecallTask | null
+    if (!task) return
+    const completed: RecallTask = {
+      ...task,
+      status: 'completed',
+      recallScore: result.recallScore,
+      recallText: result.recallText,
+      completedAt: result.completedAt,
+    }
+    await this.deps.store.put('recallTasks', completed)
   }
 
   // ---- Plans ----------------------------------------------------------
 
+  private async listPlans(): Promise<DailyTrainingPlan[]> {
+    const plans = (await this.readAll('plans', planSchema)) as unknown as DailyTrainingPlan[]
+    return [...plans].sort((a, b) => compareLocalDate(a.planDate, b.planDate))
+  }
+
   async getPlan(date: LocalDate): Promise<DailyTrainingPlan | null> {
-    const plans = this.readList(KEYS.plans, planSchema) as unknown as DailyTrainingPlan[]
+    const plans = await this.listPlans()
     return plans.find((p) => p.planDate === date) ?? null
   }
 
   async savePlan(plan: DailyTrainingPlan): Promise<DailyTrainingPlan> {
-    const plans = this.readList(KEYS.plans, planSchema) as unknown as DailyTrainingPlan[]
-    const others = plans.filter((p) => p.planDate !== plan.planDate)
-    this.writeList(KEYS.plans, [...others, plan])
+    // 1 日 1 プラン。作り直したときに古い行を残さない。
+    const stale = (await this.listPlans()).filter(
+      (p) => p.planDate === plan.planDate && p.id !== plan.id,
+    )
+    for (const old of stale) await this.deps.store.remove('plans', old.id)
+    await this.deps.store.put('plans', plan)
     return plan
   }
 
   // ---- Reset ----------------------------------------------------------
 
   async reset(): Promise<void> {
-    for (const key of Object.values(KEYS)) this.deps.storage.removeItem(key)
+    await clearAllCollections(this.deps.store)
   }
 }

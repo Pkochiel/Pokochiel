@@ -1,29 +1,30 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { toLocalDate } from '@/core/types'
-import { LocalStorageRepository } from './local-storage'
-import { MemoryStorage } from './storage'
+import { MemoryRecordStore } from '@/data/persistence/memory-store'
+import type { RecordStore } from '@/data/persistence/record-store'
+import { RecordStoreRepository } from './repository'
 
 const d = (value: string) => toLocalDate(value)
 
-function createRepository(storage = new MemoryStorage()) {
+function createRepository(store: RecordStore = new MemoryRecordStore()) {
   let counter = 0
   let clock = new Date('2026-08-19T09:00:00Z')
-  const repo = new LocalStorageRepository({
-    storage,
+  const repo = new RecordStoreRepository({
+    store,
     now: () => clock,
     createId: () => `id-${++counter}`,
     defaultTimezone: 'Asia/Tokyo',
   })
   return {
     repo,
-    storage,
+    store,
     setNow: (iso: string) => {
       clock = new Date(iso)
     },
   }
 }
 
-describe('LocalStorageRepository: profile', () => {
+describe('RecordStoreRepository: profile', () => {
   it('未保存なら null を返す', async () => {
     const { repo } = createRepository()
     expect(await repo.getProfile()).toBeNull()
@@ -57,22 +58,15 @@ describe('LocalStorageRepository: profile', () => {
     expect(second.updatedAt).not.toBe(first.updatedAt)
   })
 
-  it('壊れたデータを読んでも落ちず、初期状態として扱う', async () => {
-    const storage = new MemoryStorage()
-    storage.setItem('srl:v1:profile', '{ this is not json')
-    const { repo } = createRepository(storage)
-    expect(await repo.getProfile()).toBeNull()
-  })
-
   it('スキーマに合わないデータは破棄する', async () => {
-    const storage = new MemoryStorage()
-    storage.setItem('srl:v1:profile', JSON.stringify({ id: 'x', baselineCpm: 'fast' }))
-    const { repo } = createRepository(storage)
+    const store = new MemoryRecordStore()
+    await store.put('profile', { id: 'x', baselineCpm: 'fast' } as never)
+    const { repo } = createRepository(store)
     expect(await repo.getProfile()).toBeNull()
   })
 })
 
-describe('LocalStorageRepository: sessions と results', () => {
+describe('RecordStoreRepository: sessions と results', () => {
   it('セッションを作成し完了できる', async () => {
     const { repo } = createRepository()
     const session = await repo.createSession({
@@ -147,7 +141,7 @@ describe('LocalStorageRepository: sessions と results', () => {
   })
 })
 
-describe('LocalStorageRepository: recall tasks', () => {
+describe('RecordStoreRepository: recall tasks', () => {
   it('翌日タスクを作成できる', async () => {
     const { repo } = createRepository()
     const created = await repo.scheduleRecallTasks([
@@ -247,8 +241,8 @@ describe('LocalStorageRepository: recall tasks', () => {
   })
 })
 
-describe('LocalStorageRepository: reading tests と reset', () => {
-  let repo: LocalStorageRepository
+describe('RecordStoreRepository: reading tests と reset', () => {
+  let repo: RecordStoreRepository
 
   beforeEach(() => {
     repo = createRepository().repo
@@ -276,5 +270,74 @@ describe('LocalStorageRepository: reading tests と reset', () => {
     await repo.reset()
     expect(await repo.getProfile()).toBeNull()
     expect(await repo.listReadingTests()).toHaveLength(0)
+  })
+})
+
+/** 保存層に直接書き込むための素の行。 */
+const asRecord = (record: { id: string } & Record<string, unknown>) => record
+
+describe('RecordStoreRepository: 並び順', () => {
+  /** 保存先が返す順序（IndexedDB は id 順）に指標が引きずられないこと。 */
+  async function storeWithShuffledRows() {
+    const store = new MemoryRecordStore()
+    await store.put('sessions', asRecord({
+      id: 'z-session',
+      userId: 'local-user',
+      startedAt: '2026-08-19T09:00:00.000Z',
+      completedAt: null,
+      durationSeconds: null,
+      sessionType: 'daily',
+      localDate: '2026-08-19',
+    }))
+    const base = {
+      userId: 'local-user',
+      sessionId: 'z-session',
+      trainingType: 'speed_push',
+      passageId: null,
+      cpm: 600,
+      comprehensionScore: 70,
+      immediateRecallScore: null,
+      delayedRecallScore: null,
+      targetCpm: null,
+      backCount: null,
+      pauseCount: null,
+      difficulty: null,
+      valid: true,
+    }
+    // わざと「後の記録」を先に入れる
+    await store.put('results', asRecord({ ...base, id: 'a-later', createdAt: '2026-08-19T10:00:00.000Z' }))
+    await store.put(
+      'results',
+      asRecord({ ...base, id: 'b-earlier', createdAt: '2026-08-19T09:00:00.000Z' }),
+    )
+    return store
+  }
+
+  it('results は保存順ではなく createdAt の昇順で返す', async () => {
+    const { repo } = createRepository(await storeWithShuffledRows())
+    const results = await repo.listResults()
+    expect(results.map((r) => r.id)).toEqual(['b-earlier', 'a-later'])
+  })
+
+  it('reading tests も createdAt の昇順で返す', async () => {
+    const store = new MemoryRecordStore()
+    const base = {
+      userId: 'local-user',
+      sessionId: null,
+      passageId: 'gen-001',
+      isBaseline: true,
+      elapsedSeconds: 100,
+      characterCount: 1000,
+      cpm: 600,
+      comprehensionScore: 70,
+      recallScore: 60,
+      recallText: null,
+    }
+    await store.put('readingTests', asRecord({ ...base, id: 'a', createdAt: '2026-08-20T09:00:00.000Z' }))
+    await store.put('readingTests', asRecord({ ...base, id: 'b', createdAt: '2026-08-18T09:00:00.000Z' }))
+
+    const { repo } = createRepository(store)
+    const tests = await repo.listReadingTests()
+    expect(tests.map((t) => t.id)).toEqual(['b', 'a'])
   })
 })

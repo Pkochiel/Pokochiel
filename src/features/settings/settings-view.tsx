@@ -6,6 +6,7 @@ import { PLAN } from '@/core/config/training-config'
 import type { PlanDuration, Profile } from '@/core/types'
 import { cn } from '@/lib/cn'
 import { getRepository } from '@/data/repositories'
+import { BackupPanel } from './backup-panel'
 
 const DURATIONS: PlanDuration[] = [10, 20, 30]
 
@@ -40,7 +41,9 @@ export function SettingsView() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-fg-muted">トレーニング時間と表示の設定</p>
+        <p className="mt-1 text-sm text-fg-muted">
+          トレーニング時間・データの保存と持ち出し
+        </p>
       </header>
 
       <Card>
@@ -94,6 +97,8 @@ export function SettingsView() {
           </div>
         </dl>
       </Card>
+
+      <BackupPanel />
 
       <Card>
         <CardHeader title="表示" description="テーマは端末の設定（ライト / ダーク）に追従します。" />

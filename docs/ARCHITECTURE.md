@@ -24,13 +24,16 @@ scrape_to_pdf.py           (同上)
 | Styling | Tailwind CSS v4 | `@theme` でデザイントークン定義 |
 | Components | 自前 primitives（Button / Card / Progress / Tabs 等） | shadcn/ui は必要が生じた時点で個別に導入 |
 | Charts | 自前 SVG コンポーネント | recharts 等は入れない（数百行で足り、バンドルを汚さない） |
-| Backend | Supabase（PostgreSQL / Auth / RLS） | Phase 2 以降 |
+| 永続化 | IndexedDB（自前の薄いラッパー） | `idb` 等は入れない。使う API が限られており、`persistence/indexeddb/` に閉じている |
+| Backend | なし（Local First） | クラウド同期は将来の任意機能。無くても全機能が動く |
 | Validation | zod | 教材データとフォーム入力の検証 |
 | Unit Test | Vitest | `src/core` を中心に |
 | E2E | Playwright | Chromium はこの環境にプリインストール済み |
-| PWA | `app/manifest.ts` + 自前 Service Worker | `next-pwa` 等は使わない（Phase 5） |
+| PWA | `app/manifest.ts` + 自前 Service Worker | `next-pwa` 等は使わない（ビルド生成物に手を入れない） |
 
-バージョンは Step 3 の `package.json` 作成時に確定・固定する（調査時点の最新：next 16.3.1 / react 19.2.8 / tailwindcss 4.3.3 / vitest 4.1.11 / @playwright/test 1.62.1 / @supabase/supabase-js 2.112.3 / zod 4.4.3）。
+バージョンは `package.json` で固定する（next 16.3.1 / react 19.2.8 / tailwindcss 4.3.3 / vitest 4.1.11 /
+@playwright/test 1.62.1 / zod 4.4.3）。テスト用に `fake-indexeddb` のみ devDependency として追加している
+（IndexedDB の代替実装を自前で書くと 300 行では収まらないため）。
 
 **ライブラリ追加の判断基準：** 自前実装が 300 行未満で済み、かつ仕様が安定している領域には依存を足さない。
 
@@ -69,10 +72,11 @@ data/       教材コンテンツ／永続化（Repository 実装）— core の
 │  └─ IMPLEMENTATION_PLAN.md
 ├─ src/
 │  ├─ app/
-│  │  ├─ layout.tsx                  # フォント / theme / metadata
+│  │  ├─ layout.tsx                  # フォント / theme / metadata / SW 登録
 │  │  ├─ page.tsx                    # /            Landing
 │  │  ├─ globals.css                 # Tailwind v4 @theme トークン
-│  │  ├─ manifest.ts                 # PWA (Phase 5)
+│  │  ├─ manifest.ts                 # PWA マニフェスト
+│  │  ├─ icon.svg / apple-icon.png   # アイコン（scripts/generate-icons.mjs が生成）
 │  │  ├─ (auth)/login/page.tsx       # /login
 │  │  ├─ (app)/                      # ナビゲーション付きシェル
 │  │  │  ├─ layout.tsx
@@ -107,56 +111,104 @@ data/       教材コンテンツ／永続化（Repository 実装）— core の
 │  │     ├─ prediction-reading/ variable-speed/ regression-control/
 │  │     └─ comprehension/ immediate-recall/
 │  ├─ data/
-│  │  ├─ content/passages/*.ts       # 教材（唯一の正）
+│  │  ├─ content/passages/*.ts       # 教材（唯一の正・静的 import でオフライン可）
 │  │  ├─ content/index.ts            # 読み出し + zod 検証
-│  │  └─ repositories/               # ports & adapters（後述）
+│  │  ├─ repositories/               # TrainingRepository（ドメイン規則 + zod 検証）
+│  │  ├─ persistence/                # RecordStore ポートと保存先アダプタ
+│  │  │  ├─ record-store.ts          #   ポート定義
+│  │  │  ├─ memory-store.ts          #   メモリ（SSR / テスト）
+│  │  │  ├─ local-storage-store.ts   #   localStorage（移送元 / 代替保存先）
+│  │  │  ├─ indexeddb/               #   IndexedDB（ここだけが IDB を知る）
+│  │  │  ├─ legacy-migration.ts      #   Phase 1 データの移送
+│  │  │  └─ create-store.ts          #   保存先を決める唯一の場所
+│  │  └─ backup/                     # JSON Export / Import
 │  ├─ components/ui/                 # 汎用 primitives
 │  └─ lib/                           # cn / format / date / supabase clients
-├─ e2e/                              # Playwright
-├─ supabase/
-│  ├─ migrations/                    # SQL マイグレーション
-│  └─ seed.sql                       # scripts から自動生成（手書きしない）
-├─ scripts/generate-seed-sql.ts
+├─ e2e/                              # Playwright（helpers/storage.ts で保存内容を検証）
+├─ public/
+│  ├─ sw.js                          # Service Worker（オフライン起動）
+│  └─ icon-192.png / icon-512.png    # PWA アイコン
+├─ scripts/generate-icons.mjs        # アイコン生成（依存なし・node:zlib のみ）
 └─ (既存) 3min_networking.txt, scrape_*.py   ← 触らない
 ```
 
 ユニットテストは対象ファイルの隣に `*.test.ts` として置く（`core/metrics/cpm.test.ts` 等）。
 
-## 4. 永続化：Ports & Adapters（Phase 1→2 の要）
+## 4. 永続化：Local First
 
-Phase 1 は「ローカルで動く」ことが要件。Phase 2 で Supabase に載せ替える際に **UI を書き換えないため**、
-永続化を最初からインタフェースで切る。
+Phase 2 の要件は「インターネット接続とアカウント登録なしで、Training / Progress / Recall が
+すべて使えること」。**クラウド同期が存在しない前提で全機能が完結する。**
 
-```ts
-// src/data/repositories/types.ts
-export interface TrainingRepository {
-  getProfile(): Promise<Profile | null>
-  saveProfile(p: ProfileInput): Promise<Profile>
-  saveBaseline(r: BaselineResult): Promise<void>
-  createSession(s: SessionInput): Promise<TrainingSession>
-  completeSession(id: SessionId, at: Date): Promise<void>
-  saveResult(r: TrainingResultInput): Promise<TrainingResult>
-  listResults(range: DateRange): Promise<TrainingResult[]>
-  getTodayPlan(date: LocalDate): Promise<DailyTrainingPlan | null>
-  savePlan(plan: DailyTrainingPlan): Promise<void>
-  listDueRecallTasks(date: LocalDate): Promise<RecallTask[]>
-  scheduleRecallTask(t: RecallTaskInput): Promise<void>
-  completeRecallTask(id: RecallTaskId, score: number, at: Date): Promise<void>
-}
+### 4-1. 層構成
+
+```
+features / core                      ← 保存技術を知らない
+      ↓
+TrainingRepository                   ← ドメインの言葉（Phase 1 から変えていない）
+      ↓
+RecordStore                          ← 「id を持つレコードを collection に置く」だけの下位ポート
+      ↓
+IndexedDbRecordStore / LocalStorageRecordStore / MemoryRecordStore
 ```
 
-実装は2つ。
-
-| 実装 | Phase | 保存先 |
+| 層 | 責務 | 知っていること |
 |---|---|---|
-| `LocalStorageRepository` | 1 | `localStorage`（バージョン付きキー `srl:v1:*`、zod で読み出し検証） |
-| `SupabaseRepository` | 2 | PostgreSQL（RLS 前提） |
+| `TrainingRepository` | 既定値・重複排除・期限切れ・時系列整列・zod 検証 | ドメイン型 |
+| `RecordStore` | レコードの出し入れ（list / get / put / putMany / remove / clear） | id と collection だけ |
+| アダプタ | 保存技術そのもの | IndexedDB / localStorage / メモリ |
 
-選択は `src/data/repositories/index.ts` の単一ファクトリで行い、環境変数 `NEXT_PUBLIC_SUPABASE_URL` の有無で切り替える。
-Phase 2 では、ログイン時にローカルデータを一度だけ移送する `migrateLocalToRemote()` を用意する。
+- `TrainingRepository` の**シグネチャは Phase 1 から一切変えていない**。全メソッドが最初から
+  `Promise` を返していたため、同期の localStorage から非同期の IndexedDB へ移っても UI は無変更。
+- `RecordStore` はドメイン型を持たない（`unknown` を返す）。検証は Repository の zod が行うので、
+  ドメインの変更が保存層に波及しない。
+- `RecordStore` は**順序を保証しない**。IndexedDB は id 順で返すため、Repository が `createdAt`
+  昇順に整列する。trend 判定・直近 N 件・最新 Baseline は並び順に意味を持たせており、
+  保存先の都合を指標に混ぜないため。
+- **IndexedDB 固有の型と API は `src/data/persistence/indexeddb/` の外に出さない。**
+  UI・Core Domain・Repository のいずれにも漏らさないことを
+  `src/data/__tests__/persistence-encapsulation.test.ts` が機械的に固定する。
+
+### 4-2. 起動時に決めること
+
+`createLocalFirstStore()`（`persistence/create-store.ts`）が、初回アクセス時に一度だけ行う。
+
+1. IndexedDB を開く。開けない環境（プライベートモード等）や 3 秒で応答が無い場合は
+   **localStorage の実装に退避する**。保存先が理想的でなくてもトレーニングは止めない。
+2. Phase 1 の `srl:v1:*` に記録が残っていれば IndexedDB へ移送し、旧キーを削除する。
+   移送は id 単位の upsert なので、途中で中断されても次の起動でやり直せる。
+
+この 2 つを `DeferredRecordStore` の内側に閉じることで、`getRepository()` は同期関数のまま保てる
+（呼び出し側は Repository のメソッドを await するだけでよい）。
+
+### 4-3. 将来の Supabase Sync を差し込む位置
+
+```
+TrainingRepository
+      ↓
+RecordStore  ←── SyncingRecordStore（デコレータ）を 1 枚挟むだけ
+      ↓                    ↓
+IndexedDbRecordStore   Sync Engine ──→ Supabase
+```
+
+ローカルへの書き込みを先に確定させ、同期はその後ろで行う（オフラインで書けなくならないため）。
+差し込み位置は `createLocalFirstStore()` の 1 箇所であり、UI・Core・Repository は変更しない。
+`RecordStore` が id 単位の upsert で構成されているのは、この差分同期を後から足せるようにするため。
+
+### 4-4. Backup / Restore
+
+アカウントを作らない代わりに、記録を端末の外へ出す手段はユーザーが握る。
+
+| 操作 | 内容 |
+|---|---|
+| Export | 全 collection を 1 つの JSON（`speed-reading-lab.backup` / version 1）として書き出す |
+| Import | 形式とバージョンを確認し、**全行を zod で検証してから**現在のデータを置き換える |
+
+`BackupService`（`src/data/backup/`）が境界。UI は `createSnapshot()` / `restoreSnapshot()` だけを
+知り、collection 構造も IndexedDB も見ない。検証に通らない行は取り込まず件数を報告する
+（手で編集されたファイルでアプリが起動しなくなる状態を作らない）。
 
 **教材コンテンツは Phase を問わず `src/data/content` が唯一の正。**
-`scripts/generate-seed-sql.ts` が同じ TypeScript 定義から `supabase/seed.sql` を生成する（手書きの二重管理をしない）。
+静的 import なので、オフラインでも取得の失敗が起きない。
 
 ## 5. レンダリング戦略と状態管理
 
@@ -194,13 +246,34 @@ Phase 2 では、ログイン時にローカルデータを一度だけ移送す
 - 本文表示はキーボードのみで完結する（Space / ← / → / Esc）。スマホでは画面下部の3ボタン。
 - 文字サイズ・行間・テーマ（light/dark）は Settings で変更でき、`localStorage` に保存する。
 
+## 8-b. PWA とオフライン起動
+
+Service Worker（`public/sw.js`）は**起動できることだけ**を担う。学習記録の永続化には関与しない
+（それは IndexedDB の責務であり、2 箇所で状態を持たない）。
+
+| 対象 | 方針 | 理由 |
+|---|---|---|
+| 画面遷移 | ネットワーク優先 → キャッシュ → Dashboard | 更新を見逃さず、切断時も必ず何かを出す |
+| `/_next/static/**` | キャッシュ優先 | ファイル名にハッシュが入るため中身が変わらない |
+| その他の同一オリジン GET | キャッシュを返しつつ裏で更新 | 表示を止めない |
+
+install 時に主要画面（Dashboard / Training / 各トレーニング / Progress / Recall / Settings /
+Baseline）を取得し、**その HTML が参照している JS・CSS も HTML から読み取って**一緒に取り込む。
+HTML だけではオフラインで画面が動かないため。トレーニング画面は `generateStaticParams` で
+静的出力し、オフラインでも開けるようにしている。
+
+Service Worker は本番ビルドでのみ登録する（開発中はキャッシュが変更の確認を妨げるため）。
+オフライン時は画面上部に「オフライン：トレーニング・記録・翌日の Recall はこのまま続けられます」と
+表示する。止まったのではなく、そのまま使えることを伝える。
+
 ## 9. テスト戦略
 
 | レイヤ | ツール | 対象 |
 |---|---|---|
 | Unit | Vitest | `core/**`（CPM / ERS / difficulty adaptation / plan generation / recall scheduling / chunking / session reducer）と教材データの zod 検証 |
 | Component | Vitest + Testing Library | Pacer / ReadingSurface など時間依存の少ない UI |
-| E2E | Playwright | Baseline → Dashboard → Training → Result の完走 |
+| E2E | Playwright | Baseline → Dashboard → Training → Result の完走、オフライン起動・保存・復元 |
+| 層の封じ込め | Vitest | `core/` の純粋性（`purity.test.ts`）と、保存技術が UI / Core / Repository に漏れていないこと（`persistence-encapsulation.test.ts`） |
 
 E2E は時間依存を避けるため、`?e2e=1` 時にトレーニング時間短縮とペーサー高速化を許すテストフック（`core/config` の値を上書きするだけ）を用意する。プロダクション経路には影響させない。
 
@@ -213,22 +286,27 @@ E2E は時間依存を避けるため、`?e2e=1` 時にトレーニング時間�
 |---|---|---|
 | `RecallEvaluator` | Key Point の照合（`keyPointRecallEvaluator`） | LLM による意味的一致度の評価 |
 | `FeedbackGenerator` | ルールベース（`ruleBasedFeedback`） | AI Coach |
-| `TrainingRepository` | `LocalStorageRepository` | `SupabaseRepository` |
+| `TrainingRepository` | `RecordStoreRepository` | 変更しない（保存先の差し替えは下位で行う） |
+| `RecordStore` | `IndexedDbRecordStore`（代替: localStorage / メモリ） | `SyncingRecordStore` + Supabase |
+| `BackupService` | 端末内の JSON Export / Import | クラウドバックアップ |
 | `ContentProvider`（予定） | Seed 教材の静的 import | AI 生成・ユーザー取り込み |
 
 ## 10. Phase 計画とアーキテクチャ上の対応
 
 | Phase | 内容 | アーキテクチャ上の要点 |
 |---|---|---|
-| 1 | ローカルで動くトレーニング MVP | `LocalStorageRepository` のみ。Auth なし。教材は静的 import |
-| 2 | ユーザーデータ保存 | `SupabaseRepository` 追加 + Auth + RLS。UI は無変更 |
-| 3 | 適応型トレーニング | `core/adaptive` + `core/planner` を実データで駆動 |
-| 4 | AI コンテンツ生成 / Recall 評価 | `Segmenter` と `RecallEvaluator` をインタフェース経由で差し替え |
-| 5 | PWA・スマホ最適化 | `manifest.ts` + SW（教材と直近プランのオフラインキャッシュ） |
+| 1 | ローカルで動くトレーニング MVP | localStorage のみ。Auth なし。教材は静的 import |
+| 1.5 | Training Core Enhancement | Skill Profile を導入し、Daily Training の構成を Skill Profile から決める |
+| 2 | Local First / Offline | `RecordStore` ポート + IndexedDB。PWA でオフライン起動。Backup / Restore。Auth と Supabase は入れない |
+| 3 | Supabase Sync（任意機能） | `SyncingRecordStore` を 1 枚挟む。同期が無くても全機能が動く状態は維持する |
+| 4 | AI コンテンツ生成 / Recall 評価 | `ContentProvider` と `RecallEvaluator` をインタフェース経由で差し替え |
 
-**Phase 1.5（完了）：** 認知処理の各段を鍛えるトレーニングと測定品質。
-Skill Profile を導入し、Daily Training の構成を Skill Profile から決めるようにした。
-永続化・認証・PWA・AI には手を付けていない。
+**Phase 2（完了）：** 保存先を IndexedDB に移し、PWA でオフライン起動できるようにした。
+Auth と Supabase は入れていない。クラウドが存在しない状態で全機能が完結することを要件とし、
+E2E（`e2e/offline.spec.ts`）でネットワークを切った状態の起動・保存・翌日 Recall を確認している。
+
+**同期を後から足すときの原則：** ローカルへの書き込みを先に確定させ、同期は後追いにする。
+同期が失敗してもトレーニングが止まらないことを、常に優先する。
 
 **将来拡張（MVP では実装しない）：** ユーザー自身の Web 記事 / PDF / Kindle メモ / Obsidian ノートの取り込み。
 `PassageSource` 型（`seed` | `imported` | `generated`）と `ContentProvider` インタフェースだけ先に定義し、取り込み実装の追加でアーキテクチャが揺れないようにしておく。

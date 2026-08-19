@@ -1,4 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
+import { readCollection, waitForRecords } from './helpers/storage'
+
+interface StoredPlan {
+  blocks: { type: string; minutes: number }[]
+}
 
 /**
  * Phase 1.5 の通し確認。
@@ -169,15 +174,8 @@ test.describe('Phase 1.5 通し', () => {
     await page.goto('/training')
 
     // プランは初回表示時に生成・保存されるため、保存を待ってから読む
-    await page.waitForFunction(
-      () => JSON.parse(window.localStorage.getItem('srl:v1:plans') ?? '[]').length > 0,
-      undefined,
-      { timeout: 30_000 },
-    )
-    const plan = await page.evaluate(() =>
-      JSON.parse(window.localStorage.getItem('srl:v1:plans') ?? '[]'),
-    )
-    const types: string[] = plan[0].blocks.map((b: { type: string }) => b.type)
+    const plan = await waitForRecords<StoredPlan>(page, 'plans', 1, 30_000)
+    const types: string[] = plan[0]!.blocks.map((b) => b.type)
     expect(types).toContain('meaning_flash')
     expect(types).toContain('prediction_reading')
     expect(types).toContain('variable_speed')
@@ -194,10 +192,7 @@ test.describe('Phase 1.5 通し', () => {
     }
 
     // 合計は 30 分を超えない
-    const total = plan[0].blocks.reduce(
-      (sum: number, b: { minutes: number }) => sum + b.minutes,
-      0,
-    )
+    const total = plan[0]!.blocks.reduce((sum, b) => sum + b.minutes, 0)
     expect(total).toBeLessThanOrEqual(30)
 
     const seenScreens = new Set<string>()
@@ -220,12 +215,12 @@ test.describe('Phase 1.5 通し', () => {
     await expect(page.getByText('Skill Profile')).toBeVisible()
     await expect(page.getByText(/次回の目標速度を/)).toBeVisible()
 
-    const stored = await page.evaluate(() => ({
-      results: JSON.parse(window.localStorage.getItem('srl:v1:results') ?? '[]'),
-      recallTasks: JSON.parse(window.localStorage.getItem('srl:v1:recall_tasks') ?? '[]'),
-    }))
+    const stored = {
+      results: await readCollection<{ trainingType: string }>(page, 'results'),
+      recallTasks: await readCollection(page, 'recallTasks'),
+    }
 
-    const savedTypes = stored.results.map((r: { trainingType: string }) => r.trainingType)
+    const savedTypes = stored.results.map((r) => r.trainingType)
     for (const core of [
       'warmup',
       'speed_push',
