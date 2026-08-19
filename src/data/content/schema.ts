@@ -28,8 +28,24 @@ const paragraph = z.object({
   chunks: z.array(z.string().min(1)).min(1),
   summaryChoices: z.array(summaryChoice).min(2),
   predictionStop: z
-    .object({ prompt: z.string().min(1), expectedPoints: z.array(z.string().min(1)).min(1) })
+    .object({
+      prompt: z.string().min(1),
+      expectedPoints: z.array(z.string().min(1)).min(1),
+      choices: z
+        .array(
+          z.object({
+            id: z.string().min(1),
+            text: z.string().min(1),
+            quality: z.enum(['correct', 'partial', 'miss']),
+            explanation: z.string().min(1),
+          }),
+        )
+        .min(3)
+        .optional(),
+    })
     .optional(),
+  importance: z.enum(['known', 'example', 'evidence', 'claim', 'key']).optional(),
+  recommendedBand: z.enum(['fast', 'normal', 'slow']).optional(),
 })
 
 export const difficultyFactorsSchema = z.object({
@@ -64,6 +80,7 @@ export const passageSchema = z.object({
   speedSegments: z
     .array(
       z.object({
+        paragraphIndex: z.number().int().nonnegative(),
         text: z.string().min(1),
         importance: z.enum(['known', 'example', 'evidence', 'claim', 'key']),
         recommendedBand: z.enum(['fast', 'normal', 'slow']),

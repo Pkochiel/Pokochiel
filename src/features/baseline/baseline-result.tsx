@@ -3,6 +3,7 @@ import { Stat } from '@/components/ui/stat'
 import { ButtonLink } from '@/components/ui/button'
 import { calculateErs } from '@/core/metrics/ers'
 import type { CpmInvalidReason } from '@/core/metrics/cpm'
+import type { BaselineProfile } from '@/core/types'
 import { formatScore } from '@/lib/format'
 
 /** 無効な計測は理由を分けて伝える。「短すぎる」と「速すぎる」では次の行動が違うため。 */
@@ -22,6 +23,8 @@ export interface BaselineResultProps {
   comprehensionScore: number | null
   recallScore: number
   targetCpm: number
+  /** 複数回の測定をまとめた現在地 */
+  profile: BaselineProfile
 }
 
 export function BaselineResult({
@@ -31,6 +34,7 @@ export function BaselineResult({
   comprehensionScore,
   recallScore,
   targetCpm,
+  profile,
 }: BaselineResultProps) {
   const ers = calculateErs({ cpm, comprehensionScore, recallScore })
 
@@ -55,6 +59,32 @@ export function BaselineResult({
       </div>
 
       <section className="mt-6 rounded-2xl border border-border bg-surface p-5">
+        <h2 className="text-sm font-semibold">理解の内訳</h2>
+        <p className="mt-2 text-xs text-fg-subtle">
+          速度だけでなく、何を掴めていたかを分けて記録します。
+        </p>
+        <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
+          <div>
+            <dt className="text-xs text-fg-muted">主張の把握</dt>
+            <dd className="tabular mt-1 font-medium">{formatScore(profile.mainIdea, '%')}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-fg-muted">因果の把握</dt>
+            <dd className="tabular mt-1 font-medium">{formatScore(profile.causeEffect, '%')}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-fg-muted">構成の把握</dt>
+            <dd className="tabular mt-1 font-medium">{formatScore(profile.structure, '%')}</dd>
+          </div>
+        </dl>
+        {profile.attempts > 1 ? (
+          <p className="mt-3 text-xs text-fg-subtle">
+            {profile.attempts} 回の測定から算出しています（CPM は中央値）。
+          </p>
+        ) : null}
+      </section>
+
+      <section className="mt-4 rounded-2xl border border-border bg-surface p-5">
         <h2 className="text-sm font-semibold">明日からの目標速度</h2>
         <p className="mt-2 text-sm leading-relaxed text-fg-muted">
           Speed Push は <span className="tabular font-medium text-fg">{targetCpm} 字/分</span>{' '}

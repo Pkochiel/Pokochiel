@@ -5,15 +5,16 @@ import type { AnswerRecord } from '../metrics/comprehension'
  *
  * 重要な不変条件をここで担保する。
  * - 読了前に設問へ進めない
- * - Recall のテキストを確定する前に自己評価の画面へ進めない
- *   （模範解答を見てから点を付けられると、指標が自己申告の水増しになるため）
+ * - Recall のテキストを確定する前に Key Points を見せない
+ *   （模範解答を見てから書けると、想起の測定にならないため）
+ * - 想起スコアの主要値は Key Point の照合であり、自己評価は補助指標に留める
  */
 export type BaselinePhase =
   | 'ready'
   | 'reading'
   | 'questions'
   | 'recall_input'
-  | 'recall_score'
+  | 'recall_review'
   | 'result'
 
 export interface BaselineFlowState {
@@ -21,7 +22,10 @@ export interface BaselineFlowState {
   questionIndex: number
   answers: AnswerRecord[]
   recallText: string
-  recallScore: number | null
+  /** 思い出せていたと申告した Key Point の添字。主要な想起スコアの根拠になる。 */
+  recalledKeyPointIndexes: number[]
+  /** 補助指標としての自己評価 */
+  selfAssessment: number | null
 }
 
 export const initialBaselineFlowState: BaselineFlowState = {
@@ -29,7 +33,8 @@ export const initialBaselineFlowState: BaselineFlowState = {
   questionIndex: 0,
   answers: [],
   recallText: '',
-  recallScore: null,
+  recalledKeyPointIndexes: [],
+  selfAssessment: null,
 }
 
 export type BaselineFlowEvent =
@@ -39,8 +44,9 @@ export type BaselineFlowEvent =
   | { type: 'back_question' }
   | { type: 'set_recall_text'; text: string }
   | { type: 'submit_recall_text' }
-  | { type: 'set_recall_score'; score: number }
-  | { type: 'submit_recall_score' }
+  | { type: 'toggle_key_point'; index: number }
+  | { type: 'set_self_assessment'; score: number }
+  | { type: 'submit_recall_review' }
 
 export function baselineFlowReducer(
   state: BaselineFlowState,
@@ -79,13 +85,22 @@ export function baselineFlowReducer(
     case 'submit_recall_text':
       // 空欄のまま模範解答を見せない
       if (state.phase !== 'recall_input' || state.recallText.trim().length === 0) return state
-      return { ...state, phase: 'recall_score' }
+      return { ...state, phase: 'recall_review' }
 
-    case 'set_recall_score':
-      return state.phase === 'recall_score' ? { ...state, recallScore: event.score } : state
+    case 'toggle_key_point': {
+      if (state.phase !== 'recall_review') return state
+      const selected = new Set(state.recalledKeyPointIndexes)
+      if (selected.has(event.index)) selected.delete(event.index)
+      else selected.add(event.index)
+      return { ...state, recalledKeyPointIndexes: [...selected].sort((a, b) => a - b) }
+    }
 
-    case 'submit_recall_score':
-      if (state.phase !== 'recall_score' || state.recallScore === null) return state
+    case 'set_self_assessment':
+      return state.phase === 'recall_review' ? { ...state, selfAssessment: event.score } : state
+
+    case 'submit_recall_review':
+      // 自己評価の選択を、内容を確認したことの合図として要求する
+      if (state.phase !== 'recall_review' || state.selfAssessment === null) return state
       return { ...state, phase: 'result' }
   }
 }

@@ -35,6 +35,8 @@ export const PSYCHOLOGY_PASSAGES = [
           '期待されるほどの関係がない。',
         ],
         summary: '読み返しの回数と後で思い出せる量の間には、期待されるほどの関係がない',
+        importance: 'known',
+        recommendedBand: 'fast',
         summaryDistractors: [
           '読み返しの回数が多いほど記憶は確実に定着する',
           '読み返しは学習方法としてほとんど使われていない',
@@ -57,6 +59,8 @@ export const PSYCHOLOGY_PASSAGES = [
           '感じられる。',
         ],
         summary: '読み返し中の「分かっている」感覚は、文章が手元にあることで生まれている',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '読み返し中の感覚は理解の深さを正確に反映する',
           '文章が手元にあると理解した感覚は弱まる',
@@ -80,6 +84,8 @@ export const PSYCHOLOGY_PASSAGES = [
           '経路を強める。',
         ],
         summary: '手がかりなしで思い出す苦しい作業が、次に取り出すための経路を強める',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '思い出す作業は記憶を弱めてしまう',
           '苦しさを感じる学習は避けるべきである',
@@ -88,6 +94,36 @@ export const PSYCHOLOGY_PASSAGES = [
         predictionStop: {
           prompt: '次に何が説明されると思いますか？',
           expectedPoints: ['間隔をあけることの効果', '具体的な実践方法', '感覚と成果のずれ'],
+          choices: [
+            {
+              id: 'c1',
+              text: '思い出す作業を、いつ行うと効果が高いかという話',
+              quality: 'correct',
+              explanation:
+                '想起が記憶を強めると述べた直後なので、その条件（タイミング）へ進みます。',
+            },
+            {
+              id: 'c2',
+              text: '思い出す作業を何回繰り返すべきかという回数の話',
+              quality: 'partial',
+              explanation:
+                '想起の条件を論じる方向は合っていますが、本文が扱うのは回数ではなく間隔です。',
+            },
+            {
+              id: 'c3',
+              text: '記憶に関わる脳の部位の解剖学的な説明',
+              quality: 'miss',
+              explanation:
+                '本文は行動レベルの話に終始しており、解剖学へは進みません。',
+            },
+            {
+              id: 'c4',
+              text: '試験制度の歴史と学習方法の変遷',
+              quality: 'miss',
+              explanation:
+                '論理の方向が制度史へ逸れています。',
+            },
+          ],
         },
       },
       {
@@ -105,6 +141,8 @@ export const PSYCHOLOGY_PASSAGES = [
           '意味があるためである。',
         ],
         summary: '間隔をあけて思い出すほど定着し、忘れかけた状態からの想起に意味がある',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '思い出す作業は直後に行うほど効果がある',
           '間隔をあけると内容は完全に失われる',
@@ -122,6 +160,8 @@ export const PSYCHOLOGY_PASSAGES = [
           '後に残る。',
         ],
         summary: '学習中の手応えは当てにならず、楽な方法ほど記憶に残りにくい',
+        importance: 'key',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '学習中の手応えは成果を正確に予測する',
           '苦しい方法は避けたほうが効率がよい',

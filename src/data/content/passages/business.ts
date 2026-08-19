@@ -36,6 +36,8 @@ export const BUSINESS_PASSAGES = [
           '決まっていないためである。',
         ],
         summary: '会議は増えているが、決定が残らないという問題がある',
+        importance: 'known',
+        recommendedBand: 'fast',
         summaryDistractors: [
           '会議の参加人数が年々増加している',
           '会議の資料作成に時間がかかりすぎている',
@@ -54,6 +56,8 @@ export const BUSINESS_PASSAGES = [
           '下すことにある。',
         ],
         summary: '会議の目的を情報共有に置くことが、決定が残らない原因である',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '資料の品質が低いことが最大の問題である',
           '文書配布は会議より効率が悪い',
@@ -70,6 +74,8 @@ export const BUSINESS_PASSAGES = [
           '議論は感想の交換に終わる。',
         ],
         summary: '意思決定を目的にすると、事前に読み込んで論点だけを持ち寄る形になる',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '事前準備は参加者の負担なので減らすべきである',
           '資料は会議中に読むほうが理解が深まる',
@@ -93,6 +99,8 @@ export const BUSINESS_PASSAGES = [
           '会議の入口を設計し直したのである。',
         ],
         summary: '議題に決めることを明記し資料を前日配布した結果、時間半減と決定増加を両立した',
+        importance: 'example',
+        recommendedBand: 'fast',
         summaryDistractors: [
           '会議の参加人数を絞ったことで決定が速くなった',
           '会議を廃止したことで生産性が向上した',
@@ -110,6 +118,8 @@ export const BUSINESS_PASSAGES = [
           '会議の形式を借りていることにある。',
         ],
         summary: '問題は会議の数ではなく、判断を伴わない集まりが会議を名乗っていることである',
+        importance: 'key',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '会議は可能な限りゼロに近づけるべきである',
           '判断が必要な場面は実際にはほとんどない',
@@ -211,6 +221,8 @@ export const BUSINESS_PASSAGES = [
           'この問題の特徴である。',
         ],
         summary: 'DX投資額と成果の間に相関が見られないという問題がある',
+        importance: 'known',
+        recommendedBand: 'fast',
         summaryDistractors: [
           'DX投資を増やせば成果は比例して増える',
           'DX投資を行う企業はまだ少数である',
@@ -229,6 +241,8 @@ export const BUSINESS_PASSAGES = [
           '使えない形で蓄積されていく。',
         ],
         summary: '分断された組織構造が、全社では使えないデータの蓄積を生んでいる',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           'システムの性能不足がデータ活用を妨げている',
           'データ量が不足しているため分析ができない',
@@ -247,6 +261,8 @@ export const BUSINESS_PASSAGES = [
           '分かれたまま高速化されるだけである。',
         ],
         summary: '業務の流れが分断されたままツールを足すと、分断が高速化されるだけである',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '新しいツールの導入は常に分断を解消する',
           'ツールの性能が上がれば組織の問題も解決する',
@@ -255,6 +271,36 @@ export const BUSINESS_PASSAGES = [
         predictionStop: {
           prompt: '次に何が説明されると思いますか？',
           expectedPoints: ['では何を先に変えるべきか', '意思決定の単位の見直し', '順序の主張'],
+          choices: [
+            {
+              id: 'c1',
+              text: 'ツールより先に見直すべきものが何かという主張',
+              quality: 'correct',
+              explanation:
+                '「分かれたまま高速化される」で終わっているので、では何を先に変えるのかが続きます。',
+            },
+            {
+              id: 'c2',
+              text: '分断された組織を統合するための人事制度の設計',
+              quality: 'partial',
+              explanation:
+                '組織に着目する方向は合っていますが、本文は制度ではなく意思決定の単位を論点にします。',
+            },
+            {
+              id: 'c3',
+              text: '導入すべきツールの具体的な製品比較',
+              quality: 'miss',
+              explanation:
+                '直前でツールの追加を否定しているので、製品の話には進みません。',
+            },
+            {
+              id: 'c4',
+              text: 'DX という言葉が生まれた経緯',
+              quality: 'miss',
+              explanation:
+                '論理の方向が歴史へ逸れており、直前の問題提起とつながりません。',
+            },
+          ],
         },
       },
       {
@@ -272,6 +318,8 @@ export const BUSINESS_PASSAGES = [
           '後から見つからない。',
         ],
         summary: '判断の単位を先に決め、そこから必要なデータを逆算するべきである',
+        importance: 'key',
+        recommendedBand: 'slow',
         summaryDistractors: [
           'まずデータを大量に集めてから使い道を考えるべきである',
           '意思決定の単位は現場に任せるのが望ましい',
@@ -289,6 +337,8 @@ export const BUSINESS_PASSAGES = [
           '問われている。',
         ],
         summary: 'DXの停滞は技術投資不足ではなく組織構造の問題である',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '技術投資を増やせばDXは前進する',
           'IT人材の不足が唯一の原因である',

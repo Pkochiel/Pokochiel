@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   baselineFlowReducer,
@@ -8,22 +8,32 @@ import {
   selectedChoiceFor,
 } from '@/core/session/baseline-flow'
 import { scoreComprehension } from '@/core/metrics/comprehension'
-import { calculateCpm } from '@/core/metrics/cpm'
-import { initialTargetCpm } from '@/core/metrics/cpm'
+import { calculateCpm, initialTargetCpm } from '@/core/metrics/cpm'
+import { computeBaselineProfile } from '@/core/metrics/baseline-profile'
+import { evaluateRecall } from '@/core/metrics/recall'
 import type { TrainingPassage } from '@/core/types'
+import { selectBaselinePassage } from '@/data/content'
 import { getRepository, resolveTimezone } from '@/data/repositories'
 import { ReadingSurface } from '@/features/training/shared/reading-surface'
 import { TrainingHud } from '@/features/training/shared/training-hud'
 import { useReadingTimer } from '@/features/training/shared/use-reading-timer'
 import { BaselineResult } from './baseline-result'
 import { QuestionCard } from './question-card'
-import { RecallInput, RecallScore } from './recall-step'
+import { RecallInput, RecallReview } from './recall-step'
 import { saveBaselineResult, type BaselineOutcome } from './save-baseline'
 
-export function BaselineExperience({ passage }: { passage: TrainingPassage }) {
+/**
+ * Baseline Test。
+ *
+ * 教材は毎回ローテーションする。同じ文章を繰り返すと、2回目以降は
+ * 内容の記憶が効いてしまい、読書速度でも理解度でもない何かを測ることになる。
+ */
+export function BaselineExperience() {
   const [state, dispatch] = useReducer(baselineFlowReducer, initialBaselineFlowState)
   const timer = useReadingTimer()
 
+  const [passage, setPassage] = useState<TrainingPassage | null>(null)
+  const [attemptNumber, setAttemptNumber] = useState(1)
   const [measurement, setMeasurement] = useState<{
     elapsedSeconds: number
     pauseCount: number
@@ -32,22 +42,49 @@ export function BaselineExperience({ passage }: { passage: TrainingPassage }) {
   const startedAtRef = useRef<Date | null>(null)
   const savedRef = useRef(false)
 
-  const questions = passage.questions
+  // 使用済みの教材を避けて選ぶ
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const repository = getRepository()
+      const [profile, tests] = await Promise.all([
+        repository.getProfile(),
+        repository.listReadingTests(),
+      ])
+      if (cancelled) return
+      setPassage(selectBaselinePassage(profile?.usedBaselinePassageIds ?? []))
+      setAttemptNumber(computeBaselineProfile(tests).attempts + 1)
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const questions = useMemo(() => passage?.questions ?? [], [passage])
   const question = questions[state.questionIndex]
 
   // 結果画面に入った時点で一度だけ保存する
   useEffect(() => {
-    if (state.phase !== 'result' || savedRef.current) return
-    if (!measurement || state.recallScore === null) return
+    if (state.phase !== 'result' || savedRef.current || !passage) return
+    if (!measurement || state.selfAssessment === null) return
     savedRef.current = true
 
     const comprehension = scoreComprehension(questions, state.answers)
+    const recall = evaluateRecall({
+      keyPoints: passage.keyPoints,
+      recalledKeyPointIndexes: state.recalledKeyPointIndexes,
+      selfAssessment: state.selfAssessment,
+      text: state.recallText,
+    })
+
     void saveBaselineResult(getRepository(), {
       passage,
       elapsedSeconds: measurement.elapsedSeconds,
       pauseCount: measurement.pauseCount,
       comprehensionScore: comprehension.score,
-      recallScore: state.recallScore,
+      typeScores: comprehension.byType,
+      recallScore: recall.score,
       recallText: state.recallText,
       startedAt: startedAtRef.current ?? new Date(),
       finishedAt: new Date(),
@@ -55,16 +92,28 @@ export function BaselineExperience({ passage }: { passage: TrainingPassage }) {
     }).then(setOutcome)
   }, [state, measurement, passage, questions])
 
+  if (!passage) {
+    return (
+      <Centered>
+        <p className="text-sm text-fg-muted">測定用の文章を準備しています…</p>
+      </Centered>
+    )
+  }
+
   if (state.phase === 'ready') {
     return (
       <Centered>
         <p className="text-xs font-semibold tracking-[0.18em] text-brand uppercase">
-          Baseline Test
+          Baseline Test{attemptNumber > 1 ? `・${attemptNumber} 回目` : ''}
         </p>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">{passage.title}</h1>
         <p className="mt-4 text-sm leading-relaxed text-fg-muted">
           全 {passage.characterCount} 文字です。Start を押すと計測が始まります。
           普段どおりの速さで読み、読み終えたら Finished を押してください。
+        </p>
+        <p className="mt-2 text-xs text-fg-subtle">
+          読了後に理解度テスト（{questions.length} 問）と、本文を見ない再現を行います。
+          {attemptNumber > 1 ? '前回とは別の文章を出しています。' : ''}
         </p>
         <Button
           size="lg"
@@ -142,25 +191,25 @@ export function BaselineExperience({ passage }: { passage: TrainingPassage }) {
     )
   }
 
-  if (state.phase === 'recall_score') {
+  if (state.phase === 'recall_review') {
     return (
       <Centered>
-        <RecallScore
+        <RecallReview
           recallText={state.recallText}
           keyPoints={passage.keyPoints}
-          score={state.recallScore}
-          onSelect={(score) => dispatch({ type: 'set_recall_score', score })}
-          onSubmit={() => dispatch({ type: 'submit_recall_score' })}
+          recalledIndexes={state.recalledKeyPointIndexes}
+          onToggleKeyPoint={(index) => dispatch({ type: 'toggle_key_point', index })}
+          selfAssessment={state.selfAssessment}
+          onSelfAssess={(score) => dispatch({ type: 'set_self_assessment', score })}
+          onSubmit={() => dispatch({ type: 'submit_recall_review' })}
         />
       </Centered>
     )
   }
 
-  // result
-  const fallback = buildOutcome(passage, state, measurement)
   return (
     <Centered>
-      <BaselineResult {...(outcome ?? fallback)} />
+      <BaselineResult {...(outcome ?? buildOutcome(passage, state, measurement))} />
     </Centered>
   )
 }
@@ -168,20 +217,42 @@ export function BaselineExperience({ passage }: { passage: TrainingPassage }) {
 /** 保存の完了を待たずに結果を出せるよう、同じ値をクライアント側でも算出する。 */
 function buildOutcome(
   passage: TrainingPassage,
-  state: { answers: { questionId: string; selectedChoiceId: string | null }[]; recallScore: number | null },
+  state: {
+    answers: { questionId: string; selectedChoiceId: string | null }[]
+    recalledKeyPointIndexes: number[]
+    selfAssessment: number | null
+    recallText: string
+  },
   measurement: { elapsedSeconds: number } | null,
 ): BaselineOutcome {
   const { cpm, valid, invalidReason } = calculateCpm({
     characterCount: passage.characterCount,
     elapsedSeconds: measurement?.elapsedSeconds ?? 0,
   })
+  const comprehension = scoreComprehension(passage.questions, state.answers)
+  const recall = evaluateRecall({
+    keyPoints: passage.keyPoints,
+    recalledKeyPointIndexes: state.recalledKeyPointIndexes,
+    selfAssessment: state.selfAssessment,
+    text: state.recallText,
+  })
   return {
     cpm,
     valid,
     invalidReason,
-    comprehensionScore: scoreComprehension(passage.questions, state.answers).score,
-    recallScore: state.recallScore ?? 0,
+    comprehensionScore: comprehension.score,
+    recallScore: recall.score,
     targetCpm: initialTargetCpm(cpm),
+    profile: {
+      cpm: valid ? Math.round(cpm) : null,
+      comprehension: comprehension.score,
+      mainIdea: comprehension.byType.main_idea ?? null,
+      causeEffect: comprehension.byType.cause_effect ?? null,
+      structure: comprehension.byType.structure ?? null,
+      immediateRecall: recall.score,
+      attempts: valid ? 1 : 0,
+      updatedAt: null,
+    },
   }
 }
 

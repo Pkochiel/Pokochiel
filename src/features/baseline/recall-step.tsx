@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { RECALL } from '@/core/config/training-config'
+import { evaluateRecall } from '@/core/metrics/recall'
 import { cn } from '@/lib/cn'
 
 export interface RecallInputProps {
@@ -45,70 +46,124 @@ export function RecallInput({ value, onChange, onSubmit }: RecallInputProps) {
   )
 }
 
-export interface RecallScoreProps {
+export interface RecallReviewProps {
   recallText: string
   keyPoints: readonly string[]
-  score: number | null
-  onSelect: (score: number) => void
+  recalledIndexes: readonly number[]
+  onToggleKeyPoint: (index: number) => void
+  selfAssessment: number | null
+  onSelfAssess: (score: number) => void
   onSubmit: () => void
 }
 
-export function RecallScore({
+/**
+ * 想起の照合。
+ *
+ * 主要な指標は「Key Points のうち、いくつを実際に思い出せていたか」。
+ * 自己評価だけに依存すると、模範解答を見た後の印象で点が動くため、
+ * まず項目ごとにチェックさせ、自己評価は補助として併せて記録する。
+ */
+export function RecallReview({
   recallText,
   keyPoints,
-  score,
-  onSelect,
+  recalledIndexes,
+  onToggleKeyPoint,
+  selfAssessment,
+  onSelfAssess,
   onSubmit,
-}: RecallScoreProps) {
+}: RecallReviewProps) {
+  const evaluation = evaluateRecall({
+    keyPoints,
+    recalledKeyPointIndexes: recalledIndexes,
+    selfAssessment,
+    text: recallText,
+  })
+
   return (
     <div>
-      <h2 className="text-lg font-medium sm:text-xl">どの程度再現できていましたか</h2>
+      <h2 className="text-lg font-medium sm:text-xl">思い出せていた項目を選んでください</h2>
+      <p className="mt-3 text-sm text-fg-muted">
+        書いた内容と照らして、実際に触れられていた項目にチェックを入れます。
+        書き漏らしたものは選ばないでください。
+      </p>
 
-      <section className="mt-5 rounded-xl border border-border bg-surface p-4">
-        <h3 className="text-xs font-semibold tracking-wide text-fg-muted uppercase">Key Points</h3>
-        <ul className="mt-3 space-y-2 text-sm leading-relaxed">
-          {keyPoints.map((point) => (
-            <li key={point} className="flex gap-2">
-              <span aria-hidden className="text-brand">
-                ・
-              </span>
-              <span>{point}</span>
+      <ul className="mt-5 space-y-2">
+        {keyPoints.map((point, index) => {
+          const selected = recalledIndexes.includes(index)
+          return (
+            <li key={point}>
+              <button
+                type="button"
+                onClick={() => onToggleKeyPoint(index)}
+                aria-pressed={selected}
+                className={cn(
+                  'flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm leading-relaxed transition-colors',
+                  selected ? 'border-brand bg-brand-soft' : 'border-border hover:bg-surface-muted',
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[11px]',
+                    selected ? 'border-brand bg-brand text-brand-fg' : 'border-border',
+                  )}
+                >
+                  {selected ? '✓' : ''}
+                </span>
+                <span>{point}</span>
+              </button>
             </li>
-          ))}
-        </ul>
-      </section>
+          )
+        })}
+      </ul>
 
-      <section className="mt-4 rounded-xl border border-border bg-surface-muted p-4">
+      <p className="tabular mt-4 text-sm text-fg-muted">
+        思い出せた項目:{' '}
+        <span className="font-medium text-fg">
+          {evaluation.recalledCount} / {evaluation.totalCount}
+        </span>
+        <span className="ml-2 text-xs text-fg-subtle">（Recall Score {evaluation.score}）</span>
+      </p>
+
+      <section className="mt-5 rounded-xl border border-border bg-surface-muted p-4">
         <h3 className="text-xs font-semibold tracking-wide text-fg-muted uppercase">
           あなたの再現
         </h3>
         <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap">{recallText}</p>
       </section>
 
-      <div className="mt-6 grid grid-cols-5 gap-2">
-        {RECALL.selfAssessmentSteps.map((step) => (
-          <button
-            key={step}
-            type="button"
-            onClick={() => onSelect(step)}
-            aria-pressed={score === step}
-            className={cn(
-              'tabular rounded-xl border py-3 text-sm font-medium transition-colors',
-              score === step ? 'border-brand bg-brand-soft text-brand' : 'border-border',
-            )}
-          >
-            {step}%
-          </button>
-        ))}
+      <div className="mt-6">
+        <h3 className="text-sm font-medium">全体としての手応えは？</h3>
+        <p className="mt-1 text-xs text-fg-subtle">
+          補助的な指標です。スコアは上のチェックから算出します。
+        </p>
+        <div className="mt-3 grid grid-cols-5 gap-2">
+          {RECALL.selfAssessmentSteps.map((step) => (
+            <button
+              key={step}
+              type="button"
+              onClick={() => onSelfAssess(step)}
+              aria-pressed={selfAssessment === step}
+              className={cn(
+                'tabular rounded-xl border py-3 text-sm font-medium transition-colors',
+                selfAssessment === step
+                  ? 'border-brand bg-brand-soft text-brand'
+                  : 'border-border',
+              )}
+            >
+              {step}%
+            </button>
+          ))}
+        </div>
       </div>
 
       <Button
         onClick={onSubmit}
-        disabled={score === null}
+        disabled={selfAssessment === null}
         size="lg"
         className="mt-6 w-full sm:w-auto"
       >
-        結果を見る
+        次へ
       </Button>
     </div>
   )

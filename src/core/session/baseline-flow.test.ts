@@ -89,7 +89,7 @@ describe('baselineFlowReducer', () => {
       ...answerAll(5),
     ])
 
-    it('テキストを入力しないと自己評価へ進めない（模範解答を先に見せない）', () => {
+    it('テキストを入力しないと Key Points を見せない', () => {
       expect(baselineFlowReducer(untilRecall, { type: 'submit_recall_text' }).phase).toBe(
         'recall_input',
       )
@@ -103,12 +103,28 @@ describe('baselineFlowReducer', () => {
       expect(state.phase).toBe('recall_input')
     })
 
-    it('入力を確定すると自己評価へ進む', () => {
+    it('入力を確定すると Key Points の照合へ進む', () => {
       const state = run(
         [{ type: 'set_recall_text', text: '要点1\n要点2\n要点3' }, { type: 'submit_recall_text' }],
         untilRecall,
       )
-      expect(state.phase).toBe('recall_score')
+      expect(state.phase).toBe('recall_review')
+    })
+
+    it('思い出せた Key Point を選択・解除できる', () => {
+      let state = run(
+        [
+          { type: 'set_recall_text', text: '要点' },
+          { type: 'submit_recall_text' },
+          { type: 'toggle_key_point', index: 2 },
+          { type: 'toggle_key_point', index: 0 },
+        ],
+        untilRecall,
+      )
+      expect(state.recalledKeyPointIndexes).toEqual([0, 2])
+
+      state = baselineFlowReducer(state, { type: 'toggle_key_point', index: 0 })
+      expect(state.recalledKeyPointIndexes).toEqual([2])
     })
 
     it('自己評価を選ばないと結果へ進めない', () => {
@@ -116,30 +132,52 @@ describe('baselineFlowReducer', () => {
         [
           { type: 'set_recall_text', text: '要点' },
           { type: 'submit_recall_text' },
-          { type: 'submit_recall_score' },
+          { type: 'submit_recall_review' },
         ],
         untilRecall,
       )
-      expect(state.phase).toBe('recall_score')
+      expect(state.phase).toBe('recall_review')
     })
 
-    it('自己評価を選ぶと結果へ進む', () => {
+    it('Key Point を1つも選ばなくても、確認できていれば結果へ進める', () => {
       const state = run(
         [
           { type: 'set_recall_text', text: '要点' },
           { type: 'submit_recall_text' },
-          { type: 'set_recall_score', score: 75 },
-          { type: 'submit_recall_score' },
+          { type: 'set_self_assessment', score: 0 },
+          { type: 'submit_recall_review' },
         ],
         untilRecall,
       )
       expect(state.phase).toBe('result')
-      expect(state.recallScore).toBe(75)
+      expect(state.recalledKeyPointIndexes).toEqual([])
     })
 
-    it('Recall 入力段階では自己評価を受け付けない', () => {
-      const state = baselineFlowReducer(untilRecall, { type: 'set_recall_score', score: 100 })
-      expect(state.recallScore).toBeNull()
+    it('自己評価と Key Point の両方を保持する', () => {
+      const state = run(
+        [
+          { type: 'set_recall_text', text: '要点' },
+          { type: 'submit_recall_text' },
+          { type: 'toggle_key_point', index: 1 },
+          { type: 'set_self_assessment', score: 75 },
+          { type: 'submit_recall_review' },
+        ],
+        untilRecall,
+      )
+      expect(state.phase).toBe('result')
+      expect(state.selfAssessment).toBe(75)
+      expect(state.recalledKeyPointIndexes).toEqual([1])
+    })
+
+    it('Recall 入力段階では自己評価も Key Point も受け付けない', () => {
+      expect(
+        baselineFlowReducer(untilRecall, { type: 'set_self_assessment', score: 100 })
+          .selfAssessment,
+      ).toBeNull()
+      expect(
+        baselineFlowReducer(untilRecall, { type: 'toggle_key_point', index: 0 })
+          .recalledKeyPointIndexes,
+      ).toEqual([])
     })
   })
 
@@ -147,7 +185,7 @@ describe('baselineFlowReducer', () => {
     const state = run([
       { type: 'answer', questionId: 'q1', choiceId: 'a', totalQuestions: 5 },
       { type: 'set_recall_text', text: 'x' },
-      { type: 'submit_recall_score' },
+      { type: 'submit_recall_review' },
     ])
     expect(state).toEqual(initialBaselineFlowState)
   })

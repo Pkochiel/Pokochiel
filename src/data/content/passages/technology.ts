@@ -32,6 +32,8 @@ export const TECHNOLOGY_PASSAGES = [
           '後を絶たない。',
         ],
         summary: 'バックアップを取得していても復元できない事例が多い',
+        importance: 'known',
+        recommendedBand: 'fast',
         summaryDistractors: [
           'バックアップを取得している組織は少数である',
           '障害はバックアップがあれば必ず復旧できる',
@@ -56,6 +58,8 @@ export const TECHNOLOGY_PASSAGES = [
           '見逃されている。',
         ],
         summary: '保存の成功だけを確認していたため、対象漏れや形式変更が見逃されていた',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '保存処理が毎晩失敗していたことが原因である',
           '保存形式は変更されないため問題は起きない',
@@ -73,6 +77,8 @@ export const TECHNOLOGY_PASSAGES = [
           '「戻せるか」である。',
         ],
         summary: '検証すべきは取得の成否ではなく復元できるかどうかである',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '取得の成否を確認すれば十分である',
           '復元の検証は障害発生時に行えばよい',
@@ -101,6 +107,8 @@ export const TECHNOLOGY_PASSAGES = [
           '崩れているからである。',
         ],
         summary: '別環境への復元訓練で欠損を確認し、所要時間も記録すべきである',
+        importance: 'key',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '復元訓練は本番環境で行うのが確実である',
           '所要時間の記録は復元の成否と無関係である',
@@ -119,6 +127,8 @@ export const TECHNOLOGY_PASSAGES = [
           '控えも同時に奪う。',
         ],
         summary: '保存先が元データと同じ条件下にあると、同じ出来事で同時に失われる',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '保存先は管理しやすいよう同じ建物に置くべきである',
           '保存先の場所は復元可能性に影響しない',
@@ -215,6 +225,8 @@ export const TECHNOLOGY_PASSAGES = [
           '確実に減る。',
         ],
         summary: '自動化によって定型的な作業は確実に減る',
+        importance: 'known',
+        recommendedBand: 'fast',
         summaryDistractors: [
           '自動化は定型作業には向いていない',
           '自動化は人手の作業を増やす技術である',
@@ -237,6 +249,8 @@ export const TECHNOLOGY_PASSAGES = [
           '別に必要になる。',
         ],
         summary: '自動化された処理は見えなくなるため、異常に気づく仕組みが別に必要になる',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '自動化された処理は異常があれば必ず停止する',
           '自動化により監視の必要性はなくなる',
@@ -261,6 +275,8 @@ export const TECHNOLOGY_PASSAGES = [
           '性質を変える。',
         ],
         summary: '例外は人の手に戻り、担当者の仕事は作業から例外処理と監視へ変わる',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '例外も含めてすべて自動化できる',
           '例外処理は自動化の対象として最も効果が高い',
@@ -269,6 +285,36 @@ export const TECHNOLOGY_PASSAGES = [
         predictionStop: {
           prompt: '次に何が説明されると思いますか？',
           expectedPoints: ['例外の割合と効果の関係', '自動化の前にやるべきこと', '導入判断の基準'],
+          choices: [
+            {
+              id: 'c1',
+              text: '例外が多い業務では自動化の効果が小さいという話',
+              quality: 'correct',
+              explanation:
+                '例外が人の手に戻ると述べた直後なので、その量が効果を左右するという展開になります。',
+            },
+            {
+              id: 'c2',
+              text: '例外処理を担当する人員をどう配置するか',
+              quality: 'partial',
+              explanation:
+                '例外に着目する方向は合っていますが、本文は人員配置ではなく導入判断の基準へ進みます。',
+            },
+            {
+              id: 'c3',
+              text: '自動化ツールの選定基準と価格帯',
+              quality: 'miss',
+              explanation:
+                '製品選定は本文の論点ではありません。',
+            },
+            {
+              id: 'c4',
+              text: '自動化によって失われる雇用の統計',
+              quality: 'miss',
+              explanation:
+                '論点が社会的影響へ移っており、直前の流れから外れます。',
+            },
+          ],
         },
       },
       {
@@ -288,6 +334,8 @@ export const TECHNOLOGY_PASSAGES = [
           '減らすほうが早い。',
         ],
         summary: '例外の割合が高い業務では、自動化より例外の発生原因を減らすほうが効果的である',
+        importance: 'key',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '例外が多い業務ほど自動化の効果が大きい',
           '例外は減らせないため受け入れるしかない',
@@ -306,6 +354,8 @@ export const TECHNOLOGY_PASSAGES = [
           '比較する必要がある。',
         ],
         summary: '自動化の評価には、新たに生じる監視と例外処理の量を含める必要がある',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '自動化の評価は削減時間だけで十分である',
           '監視の負荷は測定できないため考慮しない',

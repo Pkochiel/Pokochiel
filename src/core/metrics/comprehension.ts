@@ -1,4 +1,4 @@
-import type { TrainingQuestion } from '../types/passage'
+import type { QuestionType, TrainingQuestion } from '../types/passage'
 
 export interface AnswerRecord {
   questionId: string
@@ -13,6 +13,12 @@ export interface ComprehensionResult {
   total: number
   /** 設問ごとの正誤。解説表示に使う */
   details: { questionId: string; correct: boolean; selectedChoiceId: string | null }[]
+  /**
+   * 設問タイプ別の正答率（0–100）。
+   * Baseline Profile の Main Idea / Cause & Effect / Structure はここから作る。
+   * 出題されなかったタイプは含めない（0 と未出題を区別する）。
+   */
+  byType: Partial<Record<QuestionType, number>>
 }
 
 /**
@@ -37,10 +43,23 @@ export function scoreComprehension(
   const correctCount = details.filter((d) => d.correct).length
   const total = questions.length
 
+  const byType: Partial<Record<QuestionType, number>> = {}
+  const grouped = new Map<QuestionType, { correct: number; total: number }>()
+  for (const [index, question] of questions.entries()) {
+    const bucket = grouped.get(question.type) ?? { correct: 0, total: 0 }
+    bucket.total += 1
+    if (details[index]?.correct) bucket.correct += 1
+    grouped.set(question.type, bucket)
+  }
+  for (const [type, bucket] of grouped) {
+    byType[type] = Math.round((bucket.correct / bucket.total) * 100)
+  }
+
   return {
     score: total === 0 ? null : Math.round((correctCount / total) * 100),
     correctCount,
     total,
     details,
+    byType,
   }
 }

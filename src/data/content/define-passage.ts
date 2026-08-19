@@ -7,6 +7,8 @@ import type {
   PassageParagraph,
   PredictionStop,
   QuestionType,
+  SegmentImportance,
+  SpeedBand,
   SpeedSegment,
   SummaryChoice,
   TrainingPassage,
@@ -28,6 +30,9 @@ export interface ParagraphDraft {
   summaryDistractors: [string, string, string]
   /** Prediction Reading の停止位置として使う場合のみ */
   predictionStop?: PredictionStop
+  /** Variable Speed Reading 用の情報価値。全段落に付けた教材だけが対象になる。 */
+  importance?: SegmentImportance
+  recommendedBand?: SpeedBand
 }
 
 export interface QuestionDraft {
@@ -48,7 +53,6 @@ export interface PassageDraft {
   keyPoints: string[]
   paragraphs: ParagraphDraft[]
   questions: QuestionDraft[]
-  speedSegments?: SpeedSegment[]
 }
 
 /** 空白・改行を除いた文字数。CPM の分子になる。 */
@@ -105,9 +109,28 @@ export function definePassage(draft: PassageDraft): TrainingPassage {
       text: paragraph.chunks.join(''),
       chunks: paragraph.chunks,
       summaryChoices: buildSummaryChoices(paragraph, seed),
+      ...(paragraph.predictionStop ? { predictionStop: paragraph.predictionStop } : {}),
+      ...(paragraph.importance ? { importance: paragraph.importance } : {}),
+      ...(paragraph.recommendedBand ? { recommendedBand: paragraph.recommendedBand } : {}),
     }
-    return paragraph.predictionStop ? { ...base, predictionStop: paragraph.predictionStop } : base
+    return base
   })
+
+  /**
+   * Variable Speed の区間は段落から導出する。
+   * すべての段落に重要度が付いている教材だけを対象にする
+   * （一部だけ付いていると、無印の区間で何を判断すべきか決まらないため）。
+   */
+  const speedSegments: SpeedSegment[] = paragraphs.every(
+    (p) => p.importance !== undefined && p.recommendedBand !== undefined,
+  )
+    ? paragraphs.map((p) => ({
+        paragraphIndex: p.index,
+        text: p.text,
+        importance: p.importance as SegmentImportance,
+        recommendedBand: p.recommendedBand as SpeedBand,
+      }))
+    : []
 
   const content = paragraphs.map((p) => p.text).join('\n')
 
@@ -123,7 +146,7 @@ export function definePassage(draft: PassageDraft): TrainingPassage {
     keyPoints: draft.keyPoints,
     paragraphs,
     chunks: draft.paragraphs.flatMap((p) => p.chunks),
-    ...(draft.speedSegments ? { speedSegments: draft.speedSegments } : {}),
+    ...(speedSegments.length > 0 ? { speedSegments } : {}),
     questions: draft.questions.map((q, i) => buildQuestion(q, draft.id, i)),
   }
 }

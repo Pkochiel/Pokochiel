@@ -33,6 +33,8 @@ export const ECONOMICS_PASSAGES = [
           '信号として働く。',
         ],
         summary: '価格は不足を社会に伝える信号として働く',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '価格は支払う金額を示すだけの数字である',
           '価格は生産者の希望のみを反映する',
@@ -58,6 +60,8 @@ export const ECONOMICS_PASSAGES = [
           '同時に生み出す。',
         ],
         summary: '価格の上昇は、供給を増やす動機と使用を控える動機を同時に生む',
+        importance: 'example',
+        recommendedBand: 'fast',
         summaryDistractors: [
           '価格の上昇は供給側にのみ影響する',
           '価格が上がると需要も供給も減少する',
@@ -66,6 +70,36 @@ export const ECONOMICS_PASSAGES = [
         predictionStop: {
           prompt: '次に何が説明されると思いますか？',
           expectedPoints: ['価格を統制した場合に何が起きるか', '信号が消える弊害', '不足の長期化'],
+          choices: [
+            {
+              id: 'c1',
+              text: '価格の上昇を止めた場合に、不足がどうなるかという話',
+              quality: 'correct',
+              explanation:
+                '信号としての価格を説明した直後なので、その信号を消したらどうなるかが続きます。',
+            },
+            {
+              id: 'c2',
+              text: '価格の上昇に対して消費者がどう行動するかの詳細',
+              quality: 'partial',
+              explanation:
+                '価格反応の話を続ける方向は合っていますが、本文は介入の帰結へ進みます。',
+            },
+            {
+              id: 'c3',
+              text: 'その部材を生産する産業の歴史',
+              quality: 'miss',
+              explanation:
+                '論理の方向が歴史へ逸れています。',
+            },
+            {
+              id: 'c4',
+              text: '価格を決める企業の会計処理の方法',
+              quality: 'miss',
+              explanation:
+                '会計は本文の論点ではありません。',
+            },
+          ],
         },
       },
       {
@@ -87,6 +121,8 @@ export const ECONOMICS_PASSAGES = [
           '長引くことになる。',
         ],
         summary: '価格を統制すると不足の情報が伝わらず、不足が長引く',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '価格統制によって不足は速やかに解消する',
           '価格を抑えても供給は自動的に増える',
@@ -109,6 +145,8 @@ export const ECONOMICS_PASSAGES = [
           '配分されるだけである。',
         ],
         summary: '価格は情報を効率よく伝えるが、誰が手にできるかは保証しない',
+        importance: 'key',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '価格に任せれば分配も自動的に公平になる',
           '価格は情報伝達にも分配にも失敗する',
@@ -127,6 +165,8 @@ export const ECONOMICS_PASSAGES = [
           '結果になりやすい。',
         ],
         summary: '価格の役割と分配の問題は分けて論じる必要がある',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '価格と分配は同時に論じるべきである',
           '公平の実現には価格統制が最も有効である',

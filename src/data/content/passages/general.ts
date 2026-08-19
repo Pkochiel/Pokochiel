@@ -710,6 +710,8 @@ export const GENERAL_PASSAGES = [
           '一定ではない。',
         ],
         summary: '文章の中で情報の密度は一定ではない',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '文章の情報密度はどこも同じである',
           '速読とは全体を均一に速くすることである',
@@ -730,6 +732,8 @@ export const GENERAL_PASSAGES = [
           '通過してよい部分である。',
         ],
         summary: '具体例や言い換えは、既に理解している読み手には通過してよい部分である',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '具体例は最も重要な部分である',
           'すべての部分を等しく読む必要がある',
@@ -751,6 +755,8 @@ export const GENERAL_PASSAGES = [
           '変わってしまう。',
         ],
         summary: '主張と根拠のつながりや前提の切り替わりでは速度を落とすべきである',
+        importance: 'key',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '速度を落とすべき箇所は存在しない',
           '結論だけを読めば全体が分かる',
@@ -759,6 +765,36 @@ export const GENERAL_PASSAGES = [
         predictionStop: {
           prompt: '次に何が説明されると思いますか？',
           expectedPoints: ['一定速度の問題点', '切り替えの前提', '構造の把握'],
+          choices: [
+            {
+              id: 'c1',
+              text: '速度を一定にしたときに何を取り逃がすかという話',
+              quality: 'correct',
+              explanation:
+                '速く読む箇所と遅く読む箇所を示した直後なので、一定にした場合の帰結が続きます。',
+            },
+            {
+              id: 'c2',
+              text: '速度を落とすべき箇所をさらに細かく分類する話',
+              quality: 'partial',
+              explanation:
+                '同じ話題を深める方向ですが、本文はここで一定速度の弊害へ論点を移します。',
+            },
+            {
+              id: 'c3',
+              text: '読書量を増やすための時間の作り方',
+              quality: 'miss',
+              explanation:
+                '時間管理は本文の論点ではありません。',
+            },
+            {
+              id: 'c4',
+              text: '速読法が普及した経緯と批判',
+              quality: 'miss',
+              explanation:
+                '論理の方向が歴史と論争へ逸れています。',
+            },
+          ],
         },
       },
       {
@@ -775,6 +811,8 @@ export const GENERAL_PASSAGES = [
           '要点が残らない。',
         ],
         summary: '一定の速さで読むと配分ができず、時間をかけても要点が残らない',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '一定の速さで読むほうが理解は深まる',
           '時間をかければ要点は必ず残る',
@@ -796,6 +834,8 @@ export const GENERAL_PASSAGES = [
           '成り立っている。',
         ],
         summary: '速度の切り替えは、読む前に構造をつかんでおくことで可能になる',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '構造は読み終えてから把握するものである',
           '速度の調整は勘に頼るしかない',

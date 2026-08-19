@@ -41,9 +41,27 @@ export interface SummaryChoice {
   correct: boolean
 }
 
+/**
+ * 予測の質。完全一致ではなく、論理の方向と論点の合致で評価する。
+ * - correct: 論理方向も論点も合っている
+ * - partial: 方向は合っているが、実際に展開される論点とはずれている
+ * - miss:    方向そのものが違う
+ */
+export type PredictionQuality = 'correct' | 'partial' | 'miss'
+
+export interface PredictionChoice {
+  id: string
+  text: string
+  quality: PredictionQuality
+  /** なぜその評価になるのか。回答後に提示する。 */
+  explanation: string
+}
+
 export interface PredictionStop {
   prompt: string
   expectedPoints: string[]
+  /** 選択式の予測肢。用意されている教材だけ Prediction Reading に使える。 */
+  choices?: PredictionChoice[]
 }
 
 export interface PassageParagraph {
@@ -55,9 +73,18 @@ export interface PassageParagraph {
   summaryChoices: SummaryChoice[]
   /** Prediction Reading の停止位置として使える場合のみ */
   predictionStop?: PredictionStop
+  /**
+   * Variable Speed Reading で使う情報価値。
+   * 本文を二重に持たないよう、区間は段落単位で定義する。
+   */
+  importance?: SegmentImportance
+  /** その重要度に対して推奨する読み方 */
+  recommendedBand?: SpeedBand
 }
 
 export interface SpeedSegment {
+  /** 対応する段落の index */
+  paragraphIndex: number
   text: string
   importance: SegmentImportance
   recommendedBand: SpeedBand

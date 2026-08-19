@@ -219,6 +219,8 @@ export const SCIENCE_PASSAGES = [
           '決まらない。',
         ],
         summary: '連動しているという事実だけでは因果関係は決まらない',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '連動していれば因果関係があると言える',
           '因果関係は数値の大きさで決まる',
@@ -240,6 +242,8 @@ export const SCIENCE_PASSAGES = [
           '両方を押し上げている。',
         ],
         summary: '第三の要因が両方を動かしている場合がある',
+        importance: 'example',
+        recommendedBand: 'fast',
         summaryDistractors: [
           '売上の増加が事故を引き起こしている',
           '事故の増加が売上を押し上げている',
@@ -260,6 +264,8 @@ export const SCIENCE_PASSAGES = [
           '区別できない。',
         ],
         summary: '因果の向きが逆である可能性も、相関だけからは区別できない',
+        importance: 'evidence',
+        recommendedBand: 'normal',
         summaryDistractors: [
           '運動が健康の原因であることは相関から言える',
           '因果の向きは常に明らかである',
@@ -268,6 +274,36 @@ export const SCIENCE_PASSAGES = [
         predictionStop: {
           prompt: '次に何が説明されると思いますか？',
           expectedPoints: ['因果を確かめる方法', '介入と比較', '実験できない場合の工夫'],
+          choices: [
+            {
+              id: 'c1',
+              text: '相関から因果を切り分けるための手続きの説明',
+              quality: 'correct',
+              explanation:
+                '切り分けられない理由を二つ挙げた直後なので、どう切り分けるかが続きます。',
+            },
+            {
+              id: 'c2',
+              text: '因果関係が逆転している別の事例の紹介',
+              quality: 'partial',
+              explanation:
+                '向きの話を続ける方向は合っていますが、本文は事例を増やさず方法論へ進みます。',
+            },
+            {
+              id: 'c3',
+              text: '統計学が確立するまでの歴史的経緯',
+              quality: 'miss',
+              explanation:
+                '論理の方向が歴史へ逸れています。',
+            },
+            {
+              id: 'c4',
+              text: '健康診断で測定すべき項目の一覧',
+              quality: 'miss',
+              explanation:
+                '具体的な医療実務は本文の論点ではありません。',
+            },
+          ],
         },
       },
       {
@@ -287,6 +323,8 @@ export const SCIENCE_PASSAGES = [
           '考えてよい。',
         ],
         summary: '無作為に分けて一方にだけ条件を与える介入が、因果を確かめる方法である',
+        importance: 'key',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '介入しなくても因果は確定できる',
           '無作為の割り当ては結果を歪める',
@@ -308,6 +346,8 @@ export const SCIENCE_PASSAGES = [
           '潰していく作業である。',
         ],
         summary: '因果を扱うとは、他の説明を一つずつ潰していく作業である',
+        importance: 'claim',
+        recommendedBand: 'slow',
         summaryDistractors: [
           '介入できなければ因果の議論は不可能である',
           '因果の証明は一度の分析で確定する',

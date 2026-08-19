@@ -1,4 +1,5 @@
 import type { Difficulty, PassageCategory, TrainingPassage } from '@/core/types'
+import { BASELINE_PASSAGES } from './passages/baseline'
 import { BUSINESS_PASSAGES } from './passages/business'
 import { ECONOMICS_PASSAGES } from './passages/economics'
 import { GENERAL_PASSAGES } from './passages/general'
@@ -27,13 +28,36 @@ export function getPassageById(id: string): TrainingPassage | null {
   return BY_ID.get(id) ?? null
 }
 
-/** Baseline Test で使う教材。難易度は中間、長さは 3 分程度で読み切れる分量。 */
-export const BASELINE_PASSAGE_ID = 'gen-006'
+/**
+ * Baseline Test 専用の教材。トレーニング用のプール（ALL_PASSAGES）とは分離する。
+ * 訓練で先に読んだ文章で測定すると、記憶によってスコアが押し上げられるため。
+ */
+export const BASELINE_POOL: readonly TrainingPassage[] = BASELINE_PASSAGES
 
-export function getBaselinePassage(): TrainingPassage {
-  const passage = getPassageById(BASELINE_PASSAGE_ID)
-  if (!passage) throw new Error(`Baseline passage not found: ${BASELINE_PASSAGE_ID}`)
-  return passage
+const BASELINE_BY_ID = new Map(BASELINE_POOL.map((p) => [p.id, p]))
+
+export function getBaselinePassageById(id: string): TrainingPassage | null {
+  return BASELINE_BY_ID.get(id) ?? null
+}
+
+/**
+ * 次の Baseline に使う教材を選ぶ。
+ *
+ * 未使用のものを優先し、すべて使い切っていたら最も古く使ったものへ戻る。
+ * 同じ入力からは常に同じ教材が返る（測定条件を再現できるようにするため）。
+ */
+export function selectBaselinePassage(usedIds: readonly string[] = []): TrainingPassage {
+  const unused = BASELINE_POOL.filter((p) => !usedIds.includes(p.id))
+  const pool = unused.length > 0 ? unused : BASELINE_POOL
+  const first = pool[0]
+  if (!first) throw new Error('Baseline passage pool is empty')
+  if (unused.length > 0) return first
+
+  // 使い切っている場合は、最も過去に使ったものから順に回す
+  const oldest = [...BASELINE_POOL].sort(
+    (a, b) => usedIds.indexOf(a.id) - usedIds.indexOf(b.id),
+  )[0]
+  return oldest ?? first
 }
 
 export interface PassageQuery {
