@@ -152,7 +152,7 @@ export function DashboardView() {
       <Card>
         <CardHeader
           title="Progress"
-          description="7 / 30 / 90 日の推移と、6軸の能力バランス。"
+          description="7 / 30 / 90 日の推移と、9つのスキルのバランス。"
           action={
             <ButtonLink href="/progress" variant="secondary" size="sm">
               開く

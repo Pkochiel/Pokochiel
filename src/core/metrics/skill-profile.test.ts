@@ -29,6 +29,14 @@ describe('computeSkillProfile: 未測定の扱い', () => {
     expect(profile.structure_recognition.state).toBe('unmeasured')
     expect(profile.structure_recognition.sampleCount).toBe(1)
   })
+
+  it('未測定の間はスコアを出さない（測定済みに見せない）', () => {
+    const profile = computeSkillProfile({
+      ...empty,
+      results: [makeResult({ trainingType: 'structure_reading', comprehensionScore: 90 })],
+    })
+    expect(profile.structure_recognition.score).toBeNull()
+  })
 })
 
 describe('computeSkillProfile: 状態の分類', () => {

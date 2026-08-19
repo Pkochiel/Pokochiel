@@ -39,14 +39,18 @@ function computeTrend(values: readonly number[]): number | null {
 
 function measure(id: SkillId, values: readonly number[]): SkillMeasurement {
   const recent = values.slice(-SCORING.recentWindow)
-  const score =
+  const mean =
     recent.length === 0
       ? null
       : Math.round(Math.min(100, Math.max(0, recent.reduce((a, b) => a + b, 0) / recent.length)))
+  const state = classify(mean, recent.length)
+
   return {
     id,
-    score,
-    state: classify(score, recent.length),
+    // 判定に足るサンプルがない間はスコアを出さない。
+    // 値を見せると「測定済みで中くらい」と誤読され、未測定であることが伝わらない。
+    score: state === 'unmeasured' ? null : mean,
+    state,
     sampleCount: recent.length,
     trend: computeTrend(values.slice(-SKILL.trendWindow)),
   }
