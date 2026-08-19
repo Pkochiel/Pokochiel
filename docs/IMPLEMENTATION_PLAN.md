@@ -12,13 +12,14 @@
 ### Step 2: Architecture 設計 ✅ 完了
 - `docs/PRODUCT.md` / `ARCHITECTURE.md` / `DATA_MODEL.md` / `TRAINING_LOGIC.md` / `IMPLEMENTATION_PLAN.md`
 
-### Step 3: Next.js 基本 UI
+### Step 3: Next.js 基本 UI ✅ 完了
 - `package.json`（Next 16 / React 19 / TS strict / Tailwind v4 / Vitest / Playwright / zod）
 - `tsconfig.json`（`strict`, `noUncheckedIndexedAccess`, path alias `@/*`）
 - デザイントークン（White / Black / Navy / Blue / Gray + アクセント1色）、light/dark
 - ルート骨格：`/`(Landing) `/dashboard` `/training` `/progress`、`(app)` と `(reading)` の2シェル
 - `components/ui`：Button / Card / Progress / Stat / Tabs
 - **完了条件**：`npm run build` 成功、`npm run lint` クリーン、4画面が PC/スマホ幅で崩れない
+- 結果：build 成功（12 ルート）/ lint・typecheck クリーン / unit 8 passed / E2E 6 passed（desktop・mobile 両方で横スクロール 0px）
 
 ### Step 4: Seed Training Content
 - `src/data/content/passages/*.ts` を **20〜30本**（最低10本）。全てオリジナル日本語文章。著作物の転載なし

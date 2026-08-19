@@ -9,7 +9,17 @@
 
 ## ステータス
 
-設計フェーズ完了（Step 1–2）。実装は Step 3 以降で着手する。
+Step 1–3 完了。アプリの骨格（ルーティング・デザインシステム・テスト基盤）が動作する。
+次は Step 4（Seed 教材の作成）。
+
+## 開発
+
+```bash
+npm install
+npm run dev      # 開発サーバ
+npm run check    # typecheck + lint + unit test
+npm run e2e      # Playwright（build & start を含む）
+```
 
 ## ドキュメント
 
