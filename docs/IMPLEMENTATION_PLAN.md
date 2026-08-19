@@ -56,16 +56,19 @@
 - 5種の設問タイプ、0–100 スコア、解説表示
 - **完了条件**：スコアが速度適応に接続される
 
-### Step 10: Recall
+### Step 10: Recall ✅ 完了
 - Immediate Recall（テキスト確定 → Key Points 表示 → 自己評価）
 - `scheduleRecallTasks` で翌日タスク生成、`/recall` で翌日実施
 - **完了条件**：`core/scheduler/recall-schedule.test.ts` green、翌日タスクが Dashboard に出る
 
-### Step 11: Dashboard Metrics
+### Step 11: Dashboard Metrics ✅ 完了
 - Current CPM / Comprehension / Immediate Recall / Next-day Recall / Streak
 - Progress：7 / 30 / 90 日切替、自前 SVG チャート（Speed / Comprehension / Recall）
 - Skill Radar のスコアは算出・保存（描画は後続でよい）
 - **完了条件**：E2E `Baseline → Dashboard → Training → Result` が完走（＝ MVP DoD）
+- 結果：Baseline / Daily Training / Progress / Settings の E2E が desktop・mobile で 21 passed（Daily Training は所要時間の都合で desktop のみ）
+- チャートは自前 SVG。系列色は CVD 分離・明度帯・コントラストを検証したうえで light / dark 別に選定（`--chart-1` / `--chart-2`）
+- 色に頼らない代替として、各チャートに表形式の内訳を用意
 
 ## Phase 2 — ユーザーデータ保存
 

@@ -44,6 +44,10 @@ export function TodayCard({ totalMinutes, blocks }: TodayCardProps) {
         <Badge tone="brand">{totalMinutes} min</Badge>
       </div>
 
+      {blocks.length === 0 ? (
+        <p className="mt-6 text-sm text-fg-muted">構成を準備しています…</p>
+      ) : null}
+
       <ol className="mt-6 space-y-2">
         {blocks.map((block) => (
           <li

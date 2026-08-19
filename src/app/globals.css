@@ -22,6 +22,14 @@
   --positive: #17805a;
   --negative: #b4423a;
 
+  /*
+   * チャート用の系列色。CVD 分離・明度帯・コントラストを
+   * dataviz の検証スクリプトで確認した値を使う（light / dark で別に選定）。
+   */
+  --chart-1: #2563eb;
+  --chart-2: #d97a1e;
+  --chart-grid: #e8ebf0;
+
   /* Reading Mode: 長文表示専用のトークン */
   --reading-bg: #fdfdfb;
   --reading-fg: #14181f;
@@ -50,6 +58,10 @@
 
     --reading-bg: #0e131d;
     --reading-fg: #e6eaf1;
+
+    --chart-1: #5b8def;
+    --chart-2: #bf8130;
+    --chart-grid: #232c3d;
   }
 }
 
@@ -72,6 +84,10 @@
 
   --reading-bg: #0e131d;
   --reading-fg: #e6eaf1;
+
+  --chart-1: #5b8def;
+  --chart-2: #bf8130;
+  --chart-grid: #232c3d;
 }
 
 @theme inline {
@@ -92,6 +108,9 @@
   --color-negative: var(--negative);
   --color-reading-bg: var(--reading-bg);
   --color-reading-fg: var(--reading-fg);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-grid: var(--chart-grid);
 
   --font-sans:
     system-ui, -apple-system, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP',

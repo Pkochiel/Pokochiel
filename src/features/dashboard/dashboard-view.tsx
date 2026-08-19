@@ -1,9 +1,8 @@
 'use client'
 
-import { PLAN } from '@/core/config/training-config'
-import type { PlanBlock, TrainingType } from '@/core/types'
 import { ButtonLink } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
+import { useDailyPlan } from '@/features/training/use-daily-plan'
 import { StatsGrid, type StatsGridValues } from './stats-grid'
 import { TodayCard } from './today-card'
 import { useDashboardData } from './use-dashboard-data'
@@ -17,21 +16,13 @@ const EMPTY_STATS: StatsGridValues = {
   ers: null,
 }
 
-/** TODO(Step 14): generateDailyPlan() の出力に置き換える。 */
-function defaultPlanBlocks(totalMinutes: 10 | 20 | 30): PlanBlock[] {
-  return Object.entries(PLAN.presets[totalMinutes]).map(([type, minutes], index) => ({
-    order: index + 1,
-    type: type as TrainingType,
-    minutes,
-  }))
-}
-
 export function DashboardView() {
   const { loading, profile, stats, dueRecallTasks } = useDashboardData()
+  const { plan } = useDailyPlan()
 
   const totalMinutes = profile?.preferredDurationMinutes ?? 30
-  const blocks = defaultPlanBlocks(totalMinutes)
   const onboarded = profile?.onboardedAt != null && profile.baselineCpm != null
+  const notes = plan?.generatedReason?.notes ?? []
 
   return (
     <div className="space-y-6">
@@ -47,7 +38,23 @@ export function DashboardView() {
         </Card>
       ) : null}
 
-      <TodayCard totalMinutes={totalMinutes} blocks={blocks} />
+      <TodayCard totalMinutes={totalMinutes} blocks={plan?.blocks ?? []} />
+
+      {notes.length > 0 ? (
+        <Card>
+          <CardHeader title="今日の構成の理由" />
+          <ul className="space-y-2 text-sm leading-relaxed text-fg-muted">
+            {notes.map((note) => (
+              <li key={note} className="flex gap-2">
+                <span aria-hidden className="text-brand">
+                  ・
+                </span>
+                <span>{note}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       <section>
         <h2 className="mb-3 text-sm font-semibold tracking-wide text-fg-muted uppercase">
@@ -84,7 +91,7 @@ export function DashboardView() {
       <Card>
         <CardHeader
           title="Progress"
-          description="7 / 30 / 90 日の推移を確認できます。"
+          description="7 / 30 / 90 日の推移と、6軸の能力バランス。"
           action={
             <ButtonLink href="/progress" variant="secondary" size="sm">
               開く
