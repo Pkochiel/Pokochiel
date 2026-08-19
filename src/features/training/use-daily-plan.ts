@@ -76,7 +76,7 @@ export function useDailyPlan(): DailyPlanState {
         dueRecallCount: dueRecall.length,
         targetCpm: profile?.targetCpm ?? initialTargetCpm(baselineCpm ?? FALLBACK_CPM),
         chunkLevel: profile?.chunkLevel ?? CHUNKING.defaultLevel,
-        meaningFlashLevel: profile?.chunkLevel ?? MEANING_FLASH.defaultLevel,
+        meaningFlashLevel: profile?.meaningFlashLevel ?? MEANING_FLASH.defaultLevel,
         preferredDifficulty: preferredDifficulty(skillProfile.comprehension.score),
         userId: profile?.id ?? 'local-user',
         createdAt: new Date().toISOString(),

@@ -1,4 +1,9 @@
-import type { Difficulty, PassageCategory, TrainingPassage } from '@/core/types'
+import type {
+  Difficulty,
+  PassageCategory,
+  TrainingPassage,
+  TrainingType,
+} from '@/core/types'
 import { BASELINE_PASSAGES } from './passages/baseline'
 import { BUSINESS_PASSAGES } from './passages/business'
 import { ECONOMICS_PASSAGES } from './passages/economics'
@@ -95,6 +100,46 @@ export function selectPassage(
   })
   if (candidates.length === 0) return null
   return candidates.reduce((best, current) =>
+    Math.abs(current.difficulty - targetDifficulty) < Math.abs(best.difficulty - targetDifficulty)
+      ? current
+      : best,
+  )
+}
+
+
+/** その教材が Prediction Reading に使えるか（選択肢つきの停止位置を持つか）。 */
+export function supportsPrediction(passage: TrainingPassage): boolean {
+  return passage.paragraphs.some((p) => (p.predictionStop?.choices?.length ?? 0) > 0)
+}
+
+/** その教材が Variable Speed Reading に使えるか（区間の重要度が定義済みか）。 */
+export function supportsVariableSpeed(passage: TrainingPassage): boolean {
+  return (passage.speedSegments?.length ?? 0) > 0
+}
+
+/**
+ * トレーニング種別に対応できる教材だけから選ぶ。
+ * 対応教材がなければ null を返し、呼び出し側でそのトレーニングを出さない。
+ */
+export function selectPassageForTraining(
+  training: TrainingType,
+  targetDifficulty: Difficulty,
+  options: { excludeIds?: readonly string[] } = {},
+): TrainingPassage | null {
+  const requirement: ((passage: TrainingPassage) => boolean) | null =
+    training === 'prediction_reading'
+      ? supportsPrediction
+      : training === 'variable_speed'
+        ? supportsVariableSpeed
+        : null
+
+  const excluded = new Set(options.excludeIds ?? [])
+  const capable = ALL_PASSAGES.filter((p) => (requirement ? requirement(p) : true))
+  const candidates = capable.filter((p) => !excluded.has(p.id))
+  const pool = candidates.length > 0 ? candidates : capable
+  if (pool.length === 0) return null
+
+  return pool.reduce((best, current) =>
     Math.abs(current.difficulty - targetDifficulty) < Math.abs(best.difficulty - targetDifficulty)
       ? current
       : best,

@@ -1,5 +1,6 @@
 import { adaptSpeed, type AdaptSpeedResult } from '@/core/adaptive/speed'
 import { adaptChunkLevel } from '@/core/chunking/segment'
+import { adaptMeaningFlashLevel } from '@/core/training/meaning-flash'
 import { planRecallTasks } from '@/core/scheduler/recall-schedule'
 import type { ChunkLevel, LocalDate, PlanBlock } from '@/core/types'
 import type { TrainingRepository } from '@/data/repositories'
@@ -16,6 +17,7 @@ export interface FinishSessionInput {
   baselineCpm: number
   currentTargetCpm: number
   currentChunkLevel: ChunkLevel
+  currentMeaningFlashLevel: ChunkLevel
   recentComprehension: readonly number[]
   localDate: LocalDate
   finishedAt: Date
@@ -25,6 +27,7 @@ export interface FinishSessionInput {
 export interface FinishSessionResult {
   adaptation: AdaptSpeedResult
   chunkLevel: ChunkLevel
+  meaningFlashLevel: ChunkLevel
   cpm: number | null
   comprehension: number | null
   immediateRecall: number | null
@@ -74,13 +77,19 @@ export async function finishSession(
       ? input.currentChunkLevel
       : adaptChunkLevel(input.currentChunkLevel, chunkOutcome.comprehensionScore / 100)
 
+  const flashOutcome = input.completed.find((c) => c.block.type === 'meaning_flash')?.outcome
+  const meaningFlashLevel =
+    flashOutcome?.accuracyScore == null
+      ? input.currentMeaningFlashLevel
+      : adaptMeaningFlashLevel(input.currentMeaningFlashLevel, flashOutcome.accuracyScore / 100)
+
   await repository.completeSession(
     input.sessionId,
     input.finishedAt.toISOString(),
     Math.max(0, Math.round((input.finishedAt.getTime() - input.startedAt.getTime()) / 1000)),
   )
 
-  await repository.saveProfile({ targetCpm: adaptation.targetCpm, chunkLevel })
+  await repository.saveProfile({ targetCpm: adaptation.targetCpm, chunkLevel, meaningFlashLevel })
 
   // 今日読んだ教材に翌日の Recall を予約する（重複は Repository 側で弾かれる）
   const recalledPassageIds = [
@@ -103,5 +112,5 @@ export async function finishSession(
     )
   }
 
-  return { adaptation, chunkLevel, cpm, comprehension, immediateRecall }
+  return { adaptation, chunkLevel, meaningFlashLevel, cpm, comprehension, immediateRecall }
 }

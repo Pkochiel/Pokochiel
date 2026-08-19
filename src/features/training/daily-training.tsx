@@ -2,15 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ButtonLink } from '@/components/ui/button'
-import { CHUNKING } from '@/core/config/training-config'
+import { CHUNKING, MEANING_FLASH } from '@/core/config/training-config'
 import { initialTargetCpm } from '@/core/metrics/cpm'
 import { formatLocalDate } from '@/core/util/date'
 import type { ChunkLevel, PlanBlock, TrainingPassage } from '@/core/types'
-import { getPassageById, selectPassage } from '@/data/content'
+import { getPassageById, selectPassageForTraining } from '@/data/content'
 import { getRepository, resolveTimezone } from '@/data/repositories'
 import { WarmupBlock } from './warmup/warmup-block'
 import { SpeedPushBlock } from './speed-push/speed-push-block'
 import { ChunkReadingBlock } from './chunk-reading/chunk-reading-block'
+import { MeaningFlashBlock } from './meaning-flash/meaning-flash-block'
+import { PredictionBlock } from './prediction/prediction-block'
+import { VariableSpeedBlock } from './variable-speed/variable-speed-block'
+import { RegressionBlock } from './regression/regression-block'
 import { StructureReadingBlock } from './structure-reading/structure-reading-block'
 import { ComprehensionBlock } from './comprehension/comprehension-block'
 import { ImmediateRecallBlock } from './immediate-recall/immediate-recall-block'
@@ -29,6 +33,10 @@ const BLOCK_COMPONENTS: Partial<
   warmup: WarmupBlock,
   speed_push: SpeedPushBlock,
   chunk_reading: ChunkReadingBlock,
+  meaning_flash: MeaningFlashBlock,
+  prediction_reading: PredictionBlock,
+  variable_speed: VariableSpeedBlock,
+  regression_control: RegressionBlock,
   structure_reading: StructureReadingBlock,
   comprehension: ComprehensionBlock,
   immediate_recall: ImmediateRecallBlock,
@@ -50,6 +58,7 @@ export function DailyTraining() {
 
   const targetCpm = profile?.targetCpm ?? initialTargetCpm(profile?.baselineCpm ?? FALLBACK_CPM)
   const chunkLevel: ChunkLevel = profile?.chunkLevel ?? CHUNKING.defaultLevel
+  const meaningFlashLevel: ChunkLevel = profile?.meaningFlashLevel ?? MEANING_FLASH.defaultLevel
 
   // セッションはプランを開いた時点で1件だけ作る
   useEffect(() => {
@@ -97,6 +106,7 @@ export function DailyTraining() {
         baselineCpm: profile?.baselineCpm ?? FALLBACK_CPM,
         currentTargetCpm: targetCpm,
         currentChunkLevel: chunkLevel,
+        currentMeaningFlashLevel: meaningFlashLevel,
         recentComprehension: previous.flatMap((r) =>
           r.comprehensionScore === null ? [] : [r.comprehensionScore],
         ),
@@ -115,7 +125,7 @@ export function DailyTraining() {
         blocksCompleted: blocks.length,
       })
     },
-    [chunkLevel, profile?.baselineCpm, targetCpm],
+    [chunkLevel, meaningFlashLevel, profile?.baselineCpm, targetCpm],
   )
 
   const handleComplete = useCallback(
@@ -204,7 +214,9 @@ export function DailyTraining() {
         key={block.order}
         passage={passage}
         targetCpm={block.targetCpm ?? targetCpm}
-        chunkLevel={block.chunkLevel ?? chunkLevel}
+        chunkLevel={
+          block.chunkLevel ?? (block.type === 'meaning_flash' ? meaningFlashLevel : chunkLevel)
+        }
         minutes={block.minutes}
         onComplete={(outcome) => handleComplete(block, outcome)}
       />
@@ -212,13 +224,16 @@ export function DailyTraining() {
   )
 }
 
-/** プランが指す教材。見つからなければ難易度が近いもので代替し、セッションを止めない。 */
+/**
+ * プランが指す教材。見つからない場合は、そのトレーニングに対応できる教材で代替する
+ * （Prediction や Variable Speed は、対応していない教材では成立しないため）。
+ */
 function resolvePassage(block: PlanBlock): TrainingPassage | null {
   if (block.passageId) {
     const passage = getPassageById(block.passageId)
     if (passage) return passage
   }
-  return selectPassage(3)
+  return selectPassageForTraining(block.type, 3)
 }
 
 function SessionProgress({

@@ -21,6 +21,7 @@ export interface ProfileInput {
   targetCpm?: number | null
   preferredDurationMinutes?: PlanDuration
   chunkLevel?: ChunkLevel
+  meaningFlashLevel?: ChunkLevel
   timezone?: string
   onboardedAt?: string | null
   baselineProfile?: BaselineProfile | null

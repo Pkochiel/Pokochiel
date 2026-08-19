@@ -6,6 +6,9 @@ import {
   queryPassages,
   selectBaselinePassage,
   selectPassage,
+  selectPassageForTraining,
+  supportsPrediction,
+  supportsVariableSpeed,
 } from './index'
 import { countCharacters, difficultyDeviation } from './define-passage'
 import { passageSchema } from './schema'
@@ -305,4 +308,38 @@ describe('Variable Speed Reading 用の区間', () => {
       }
     },
   )
+})
+
+describe('selectPassageForTraining', () => {
+  it('Prediction には停止位置を持つ教材だけを返す', () => {
+    const passage = selectPassageForTraining('prediction_reading', 3)
+    expect(passage).not.toBeNull()
+    expect(supportsPrediction(passage!)).toBe(true)
+  })
+
+  it('Variable Speed には区間を持つ教材だけを返す', () => {
+    const passage = selectPassageForTraining('variable_speed', 3)
+    expect(passage).not.toBeNull()
+    expect(supportsVariableSpeed(passage!)).toBe(true)
+  })
+
+  it('除外指定があっても、対応教材がある限り null にしない', () => {
+    const first = selectPassageForTraining('prediction_reading', 3)
+    const second = selectPassageForTraining('prediction_reading', 3, {
+      excludeIds: [first!.id],
+    })
+    expect(second).not.toBeNull()
+    expect(second!.id).not.toBe(first!.id)
+  })
+
+  it('すべて除外されても対応教材を返す（トレーニングを止めない）', () => {
+    const all = ALL_PASSAGES.map((p) => p.id)
+    const passage = selectPassageForTraining('variable_speed', 3, { excludeIds: all })
+    expect(passage).not.toBeNull()
+    expect(supportsVariableSpeed(passage!)).toBe(true)
+  })
+
+  it('制約のないトレーニングでは難易度が近い教材を選ぶ', () => {
+    expect(selectPassageForTraining('speed_push', 5)?.difficulty).toBe(5)
+  })
 })

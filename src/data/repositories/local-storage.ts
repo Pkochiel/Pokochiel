@@ -10,7 +10,7 @@ import type {
   TrainingSession,
 } from '@/core/types'
 import { compareLocalDate, isSameOrBefore } from '@/core/util/date'
-import { CHUNKING } from '@/core/config/training-config'
+import { CHUNKING, MEANING_FLASH } from '@/core/config/training-config'
 import type {
   ProfileInput,
   ReadingTestInput,
@@ -109,6 +109,8 @@ export class LocalStorageRepository implements TrainingRepository {
       preferredDurationMinutes:
         input.preferredDurationMinutes ?? existing?.preferredDurationMinutes ?? 30,
       chunkLevel: input.chunkLevel ?? existing?.chunkLevel ?? CHUNKING.defaultLevel,
+      meaningFlashLevel:
+        input.meaningFlashLevel ?? existing?.meaningFlashLevel ?? MEANING_FLASH.defaultLevel,
       baselineProfile: input.baselineProfile ?? existing?.baselineProfile ?? null,
       usedBaselinePassageIds:
         input.usedBaselinePassageIds ?? existing?.usedBaselinePassageIds ?? [],

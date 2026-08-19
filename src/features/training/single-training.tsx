@@ -3,17 +3,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ButtonLink } from '@/components/ui/button'
 import { Stat } from '@/components/ui/stat'
-import { CHUNKING } from '@/core/config/training-config'
+import { CHUNKING, MEANING_FLASH } from '@/core/config/training-config'
 import { initialTargetCpm } from '@/core/metrics/cpm'
 import { planRecallTasks } from '@/core/scheduler/recall-schedule'
 import { formatLocalDate } from '@/core/util/date'
 import type { ChunkLevel, Profile, TrainingPassage, TrainingType } from '@/core/types'
 import { formatScore } from '@/lib/format'
-import { selectPassage } from '@/data/content'
+import { selectPassageForTraining } from '@/data/content'
 import { getRepository, resolveTimezone } from '@/data/repositories'
 import { WarmupBlock } from './warmup/warmup-block'
 import { SpeedPushBlock } from './speed-push/speed-push-block'
 import { ChunkReadingBlock } from './chunk-reading/chunk-reading-block'
+import { MeaningFlashBlock } from './meaning-flash/meaning-flash-block'
+import { PredictionBlock } from './prediction/prediction-block'
+import { VariableSpeedBlock } from './variable-speed/variable-speed-block'
+import { RegressionBlock } from './regression/regression-block'
 import { StructureReadingBlock } from './structure-reading/structure-reading-block'
 import { ComprehensionBlock } from './comprehension/comprehension-block'
 import { ImmediateRecallBlock } from './immediate-recall/immediate-recall-block'
@@ -29,6 +33,10 @@ const BLOCK_COMPONENTS: Partial<
   warmup: WarmupBlock,
   speed_push: SpeedPushBlock,
   chunk_reading: ChunkReadingBlock,
+  meaning_flash: MeaningFlashBlock,
+  prediction_reading: PredictionBlock,
+  variable_speed: VariableSpeedBlock,
+  regression_control: RegressionBlock,
   structure_reading: StructureReadingBlock,
   comprehension: ComprehensionBlock,
   immediate_recall: ImmediateRecallBlock,
@@ -56,14 +64,14 @@ export function SingleTraining({ type }: { type: TrainingType }) {
       if (cancelled) return
       usedIdsRef.current = results.flatMap((r) => (r.passageId ? [r.passageId] : []))
       setProfile(loaded)
-      setPassage(selectPassage(3, { excludeIds: usedIdsRef.current.slice(-10) }))
+      setPassage(selectPassageForTraining(type, 3, { excludeIds: usedIdsRef.current.slice(-10) }))
       setLoading(false)
     }
     void load()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [type])
 
   const handleComplete = useCallback(
     async (result: BlockOutcome) => {
@@ -164,7 +172,10 @@ export function SingleTraining({ type }: { type: TrainingType }) {
   }
 
   const targetCpm = profile?.targetCpm ?? initialTargetCpm(profile?.baselineCpm ?? FALLBACK_CPM)
-  const chunkLevel: ChunkLevel = profile?.chunkLevel ?? CHUNKING.defaultLevel
+  const chunkLevel: ChunkLevel =
+    type === 'meaning_flash'
+      ? (profile?.meaningFlashLevel ?? MEANING_FLASH.defaultLevel)
+      : (profile?.chunkLevel ?? CHUNKING.defaultLevel)
 
   return (
     <Component

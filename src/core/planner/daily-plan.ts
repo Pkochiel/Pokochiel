@@ -339,7 +339,9 @@ export function toCandidates(passages: readonly TrainingPassage[]): PassageCandi
     id: p.id,
     difficulty: p.difficulty,
     characterCount: p.characterCount,
-    supportsPrediction: p.paragraphs.some((paragraph) => paragraph.predictionStop !== undefined),
+    supportsPrediction: p.paragraphs.some(
+      (paragraph) => (paragraph.predictionStop?.choices?.length ?? 0) > 0,
+    ),
     supportsVariableSpeed: (p.speedSegments?.length ?? 0) > 0,
   }))
 }

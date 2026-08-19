@@ -12,13 +12,17 @@ export interface Pacer {
   status: 'idle' | 'running' | 'paused' | 'hidden' | 'finished'
   /** 現在読み進んでいるはずの文字位置 */
   position: number
+  /** 読み戻した回数 */
+  backCount: number
   /** 0–1 */
   progress: number
   elapsedSeconds: number
   pauseCount: number
   start: () => void
   toggle: () => void
-  finish: () => { elapsedSeconds: number; pauseCount: number }
+  /** 読み戻す（禁止はしない。回数だけ記録する）。 */
+  goBack: (chars: number) => void
+  finish: () => { elapsedSeconds: number; pauseCount: number; backCount: number }
 }
 
 export interface UsePacerOptions {
@@ -28,7 +32,11 @@ export interface UsePacerOptions {
    * 本文の末尾に到達したときに一度だけ呼ばれる。
    * 到達＝読了なので、計測はここで確定して渡す。
    */
-  onReachEnd?: (result: { elapsedSeconds: number; pauseCount: number }) => void
+  onReachEnd?: (result: {
+    elapsedSeconds: number
+    pauseCount: number
+    backCount: number
+  }) => void
 }
 
 /**
@@ -40,8 +48,13 @@ export interface UsePacerOptions {
 export function usePacer({ targetCpm, totalCharacters, onReachEnd }: UsePacerOptions): Pacer {
   const [state, dispatch] = useReducer(timerReducer, initialTimerState)
   const [live, setLive] = useState({ position: 0, elapsedSeconds: 0 })
+  // 読み戻しは位置の補正として扱う（時間は巻き戻さない）
+  const [offsetChars, setOffsetChars] = useState(0)
+  const [backCount, setBackCount] = useState(0)
+  const offsetRef = useRef(0)
   const stateRef = useRef(state)
   const reachedEndRef = useRef(false)
+  const backCountRef = useRef(0)
   const onReachEndRef = useRef(onReachEnd)
 
   useEffect(() => {
@@ -52,6 +65,14 @@ export function usePacer({ targetCpm, totalCharacters, onReachEnd }: UsePacerOpt
     onReachEndRef.current = onReachEnd
   }, [onReachEnd])
 
+  useEffect(() => {
+    offsetRef.current = offsetChars
+  }, [offsetChars])
+
+  useEffect(() => {
+    backCountRef.current = backCount
+  }, [backCount])
+
   const running = state.status === 'running'
 
   useEffect(() => {
@@ -59,7 +80,7 @@ export function usePacer({ targetCpm, totalCharacters, onReachEnd }: UsePacerOpt
     let frame = 0
     const tick = () => {
       const seconds = computeElapsedSeconds(stateRef.current, performance.now())
-      const position = charPositionAt(seconds, targetCpm)
+      const position = Math.max(0, charPositionAt(seconds, targetCpm) + offsetRef.current)
       setLive({ position, elapsedSeconds: seconds })
 
       // 末尾への到達は effect ではなくここで検出する（描画中に状態を変えない）
@@ -71,6 +92,7 @@ export function usePacer({ targetCpm, totalCharacters, onReachEnd }: UsePacerOpt
         onReachEndRef.current?.({
           elapsedSeconds: computeElapsedSeconds(finished, at),
           pauseCount: finished.pauseCount,
+          backCount: backCountRef.current,
         })
         return
       }
@@ -94,6 +116,11 @@ export function usePacer({ targetCpm, totalCharacters, onReachEnd }: UsePacerOpt
 
   const start = useCallback(() => dispatch({ type: 'start', at: performance.now() }), [])
 
+  const goBack = useCallback((chars: number) => {
+    setOffsetChars((current) => current - Math.abs(chars))
+    setBackCount((count) => count + 1)
+  }, [])
+
   const toggle = useCallback(() => {
     const at = performance.now()
     dispatch({ type: stateRef.current.status === 'running' ? 'pause' : 'resume', at })
@@ -106,6 +133,7 @@ export function usePacer({ targetCpm, totalCharacters, onReachEnd }: UsePacerOpt
     return {
       elapsedSeconds: computeElapsedSeconds(finished, at),
       pauseCount: finished.pauseCount,
+      backCount: backCountRef.current,
     }
   }, [])
 
@@ -118,8 +146,10 @@ export function usePacer({ targetCpm, totalCharacters, onReachEnd }: UsePacerOpt
     progress: pacerProgress(live.position, totalCharacters),
     elapsedSeconds,
     pauseCount: state.pauseCount,
+    backCount,
     start,
     toggle,
+    goBack,
     finish,
   }
 }

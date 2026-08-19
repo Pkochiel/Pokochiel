@@ -33,6 +33,7 @@ export const profileSchema = z.object({
   usedBaselinePassageIds: z.array(z.string()).default([]),
   preferredDurationMinutes: planDuration,
   chunkLevel,
+  meaningFlashLevel: chunkLevel.default(2),
   timezone: z.string(),
   onboardedAt: z.string().nullable(),
   createdAt: z.string(),

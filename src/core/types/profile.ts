@@ -25,6 +25,8 @@ export interface Profile {
   targetCpm: number | null
   preferredDurationMinutes: PlanDuration
   chunkLevel: ChunkLevel
+  /** Meaning Flash のレベル。表示時間を決める。 */
+  meaningFlashLevel: ChunkLevel
   timezone: string
   onboardedAt: string | null
   /**
