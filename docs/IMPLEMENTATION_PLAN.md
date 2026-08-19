@@ -38,21 +38,21 @@
 - 併せて実装：`core/metrics/{cpm,comprehension,recall,ers,dashboard-stats}`、`core/session/{timer,baseline-flow}`、`core/scheduler/recall-schedule`、`core/util/date`、`LocalStorageRepository`
 - 計測の妥当性：3秒未満・6000CPM超は `valid=false` とし、基準値を汚染しない（理由別のメッセージを表示）
 
-### Step 6: Speed Push
+### Step 6: Speed Push ✅ 完了
 - ペーサー（ライン / ハイライト / ガイドバー）を `requestAnimationFrame` で駆動
 - 初期速度 `baseline × 1.15`、理解度に応じた `adaptSpeed`
 - **完了条件**：`core/adaptive/speed.test.ts` green、速度が設定レンジ内に収まる
 
-### Step 7: Chunk Reading
+### Step 7: Chunk Reading ✅ 完了
 - Level 1–5、表示時間下限 250ms、`prefers-reduced-motion` 対応
 - 意味単位を割らない分割ロジック
 - **完了条件**：`core/chunking/segment.test.ts` green
 
-### Step 8: Structure Reading
+### Step 8: Structure Reading ✅ 完了
 - 段落ごとに「結局この段落は何を言っている？」を選択式で回答
 - **完了条件**：段落要旨の正答率が Structure 軸に反映される
 
-### Step 9: Comprehension Test
+### Step 9: Comprehension Test ✅ 完了
 - 5種の設問タイプ、0–100 スコア、解説表示
 - **完了条件**：スコアが速度適応に接続される
 
@@ -80,10 +80,12 @@
 
 ## Phase 3 — 適応型トレーニング
 
-### Step 14: Adaptive Training
-- `generateDailyPlan` を実データで駆動、10/20/30 分の切替
-- 弱点に応じた配分変更（Recall 低下時は速度を落とさず配分を変える）
-- `generated_reason` を Dashboard に短文で提示
+### Step 14: Adaptive Training（Phase 1 で先行実装済み）
+- `generateDailyPlan` を実データで駆動、10/20/30 分の切替 ✅
+- 弱点に応じた配分変更（Recall 低下時は速度を落とさず配分を変える）✅
+- 未実測の軸を弱点と誤認しない（新規ユーザーには標準構成）✅
+- 供出元はベース配分の半分を保持し、特定のトレーニングが消えないようにする ✅
+- 残り：`generated_reason` を Dashboard に短文で提示（Step 11 で対応）
 
 ## Phase 5 — PWA
 

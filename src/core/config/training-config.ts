@@ -92,6 +92,12 @@ export const PLAN = {
   /** 総時間のこの割合までを、強いブロックから弱点ブロックへ移す */
   reallocationRatio: 0.2,
   blockMinMinutes: 1,
+  /**
+   * 供出元が最低限保持する割合。
+   * 特定のトレーニングだけが実質消えると日々の構成が崩れるため、
+   * 弱点調整でもベース配分の半分は残す。
+   */
+  donorRetentionRatio: 0.5,
   /** 翌日 Recall を差し込む場合の所要分 */
   delayedRecallMinutes: 2,
   /** 直近この日数で使った教材は再利用しない */
@@ -100,6 +106,7 @@ export const PLAN = {
   presets: Record<PlanDuration, Partial<Record<TrainingType, number>>>
   reallocationRatio: number
   blockMinMinutes: number
+  donorRetentionRatio: number
   delayedRecallMinutes: number
   passageCooldownDays: number
 }
