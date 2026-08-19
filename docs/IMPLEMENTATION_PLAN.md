@@ -21,11 +21,13 @@
 - **完了条件**：`npm run build` 成功、`npm run lint` クリーン、4画面が PC/スマホ幅で崩れない
 - 結果：build 成功（12 ルート）/ lint・typecheck クリーン / unit 8 passed / E2E 6 passed（desktop・mobile 両方で横スクロール 0px）
 
-### Step 4: Seed Training Content
+### Step 4: Seed Training Content ✅ 完了
 - `src/data/content/passages/*.ts` を **20〜30本**（最低10本）。全てオリジナル日本語文章。著作物の転載なし
 - 各教材：本文 / 段落 / `chunks`（意味単位）/ `keyPoints` 3–5 / 設問5問以上（4種以上・inference 必須）/ `estimatedDifficulty`
 - zod スキーマ + データ検証テスト（`characterCount` の一致、設問種別カバレッジ、chunks の結合が本文と一致すること）
 - **完了条件**：`content.test.ts` が全教材で green
+- 結果：26本 / 計11,536字 / 難易度 d1:2 d2:7 d3:9 d4:6 d5:2 / 全7カテゴリ / 検証 399 assertions green
+- 本文は「意味単位（チャンク）の配列」として執筆し、content・characterCount・chunks はそこから導出する（二重管理と境界の食い違いを構造的に排除）
 
 ### Step 5: Baseline Reading Test
 - `/baseline`：Start → 計測 → Finished → 理解度5問 → Recall（3–5項目）→ 初期スコア確定
