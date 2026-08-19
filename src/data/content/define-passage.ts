@@ -103,6 +103,7 @@ export function definePassage(draft: PassageDraft): TrainingPassage {
     const base: PassageParagraph = {
       index,
       text: paragraph.chunks.join(''),
+      chunks: paragraph.chunks,
       summaryChoices: buildSummaryChoices(paragraph, seed),
     }
     return paragraph.predictionStop ? { ...base, predictionStop: paragraph.predictionStop } : base

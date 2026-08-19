@@ -25,6 +25,7 @@ const question = z.object({
 const paragraph = z.object({
   index: z.number().int().nonnegative(),
   text: z.string().min(1),
+  chunks: z.array(z.string().min(1)).min(1),
   summaryChoices: z.array(summaryChoice).min(2),
   predictionStop: z
     .object({ prompt: z.string().min(1), expectedPoints: z.array(z.string().min(1)).min(1) })

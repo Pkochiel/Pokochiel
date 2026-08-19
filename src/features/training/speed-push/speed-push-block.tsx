@@ -97,7 +97,7 @@ export function SpeedPushBlock({ passage, targetCpm, minutes, onComplete }: Trai
           progress={pacer.progress}
         />
         <main className="mx-auto max-w-3xl px-5 pt-24 pb-32 sm:px-8">
-          <PacedText chunks={passage.chunks} position={pacer.position} />
+          <PacedText paragraphs={passage.paragraphs} position={pacer.position} />
         </main>
         <div className="fixed inset-x-0 bottom-0 bg-reading-bg/90 px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur sm:px-8">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">

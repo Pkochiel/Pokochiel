@@ -140,3 +140,21 @@ describe('passage selection', () => {
     expect(selectPassage(3, { excludeIds: ALL_PASSAGES.map((p) => p.id) })).toBeNull()
   })
 })
+
+describe('段落のチャンク', () => {
+  it.each(ALL_PASSAGES.map((p) => [p.id, p] as const))(
+    '%s は段落ごとのチャンクを連結すると段落本文に一致する',
+    (_id, passage) => {
+      for (const paragraph of passage.paragraphs) {
+        expect(paragraph.chunks.join('')).toBe(paragraph.text)
+      }
+    },
+  )
+
+  it.each(ALL_PASSAGES.map((p) => [p.id, p] as const))(
+    '%s は段落のチャンクの合計が教材全体のチャンクと一致する',
+    (_id, passage) => {
+      expect(passage.paragraphs.flatMap((p) => p.chunks)).toEqual(passage.chunks)
+    },
+  )
+})

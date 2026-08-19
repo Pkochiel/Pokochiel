@@ -49,6 +49,8 @@ export interface PredictionStop {
 export interface PassageParagraph {
   index: number
   text: string
+  /** この段落を構成する意味単位。ペーサー表示で段落構造を保つために持つ。 */
+  chunks: string[]
   /** 「結局この段落は何を言っている？」の選択肢 */
   summaryChoices: SummaryChoice[]
   /** Prediction Reading の停止位置として使える場合のみ */
