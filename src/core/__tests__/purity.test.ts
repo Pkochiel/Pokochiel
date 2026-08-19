@@ -22,6 +22,22 @@ const FORBIDDEN: { pattern: RegExp; reason: string }[] = [
   { pattern: /\bperformance\.now\(/, reason: '計測 API に依存している' },
 ]
 
+/**
+ * コメントを除いたコードだけを検査対象にする。
+ * 「performance.now() は呼び出し側の責務」のような説明を書けなくなると、
+ * 純粋性の意図そのものが文書化できなくなるため。
+ */
+function stripComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((line) => {
+      const trimmed = line.trimStart()
+      return !trimmed.startsWith('//') && !trimmed.startsWith('*')
+    })
+    .join('\n')
+}
+
 function collectSourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const path = join(dir, entry)
@@ -41,7 +57,7 @@ describe('core layer purity', () => {
   })
 
   it.each(files)('%s は UI・DOM・現在時刻に依存しない', (file) => {
-    const source = readFileSync(file, 'utf8')
+    const source = stripComments(readFileSync(file, 'utf8'))
     const violations = FORBIDDEN.filter(({ pattern }) => pattern.test(source)).map(
       ({ reason }) => reason,
     )

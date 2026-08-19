@@ -29,11 +29,14 @@
 - 結果：26本 / 計11,536字 / 難易度 d1:2 d2:7 d3:9 d4:6 d5:2 / 全7カテゴリ / 検証 399 assertions green
 - 本文は「意味単位（チャンク）の配列」として執筆し、content・characterCount・chunks はそこから導出する（二重管理と境界の食い違いを構造的に排除）
 
-### Step 5: Baseline Reading Test
+### Step 5: Baseline Reading Test ✅ 完了
 - `/baseline`：Start → 計測 → Finished → 理解度5問 → Recall（3–5項目）→ 初期スコア確定
 - `performance.now()` 計測、`visibilitychange` でポーズ、`valid` 判定
 - 結果を `LocalStorageRepository` に保存し、`baseline_cpm` / `target_cpm` を確定
 - **完了条件**：CPM / Comprehension / Recall / Structure の初期値が Dashboard に反映される
+- 結果：`/baseline/read` の全フロー（読書 → 理解度5問 → Recall → 結果）が動作。E2E 14 passed / unit 563 passed
+- 併せて実装：`core/metrics/{cpm,comprehension,recall,ers,dashboard-stats}`、`core/session/{timer,baseline-flow}`、`core/scheduler/recall-schedule`、`core/util/date`、`LocalStorageRepository`
+- 計測の妥当性：3秒未満・6000CPM超は `valid=false` とし、基準値を汚染しない（理由別のメッセージを表示）
 
 ### Step 6: Speed Push
 - ペーサー（ライン / ハイライト / ガイドバー）を `requestAnimationFrame` で駆動

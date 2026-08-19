@@ -1,20 +1,16 @@
 import { Stat } from '@/components/ui/stat'
+import { formatScore } from '@/lib/format'
+import type { DashboardStats } from '@/core/metrics/dashboard-stats'
 
-export interface DashboardStats {
-  currentCpm: number | null
-  comprehension: number | null
-  immediateRecall: number | null
-  nextDayRecall: number | null
-  streakDays: number
-  ers: number | null
-}
+/** Dashboard に必要な指標だけを受け取る（sampleCounts は表示側で扱う）。 */
+export type StatsGridValues = Pick<
+  DashboardStats,
+  'currentCpm' | 'comprehension' | 'immediateRecall' | 'nextDayRecall' | 'streakDays' | 'ers'
+>
 
-const EMPTY = '—'
+const format = (value: number | null): string => formatScore(value)
 
-const format = (value: number | null, digits = 0): string =>
-  value === null ? EMPTY : value.toFixed(digits)
-
-export function StatsGrid({ stats }: { stats: DashboardStats }) {
+export function StatsGrid({ stats }: { stats: StatsGridValues }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
       <Stat
