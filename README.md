@@ -9,8 +9,13 @@
 
 ## ステータス
 
-Step 1–3 完了。アプリの骨格（ルーティング・デザインシステム・テスト基盤）が動作する。
-次は Step 4（Seed 教材の作成）。
+**Phase 1（MVP）完了。** Step 1–11 と Step 14（適応型トレーニング）を実装済み。
+
+新規ユーザーが Baseline Test → Daily Training（Warm-up / Speed Push / Chunk Reading /
+Structure Reading / Comprehension / Immediate Recall）→ 翌日 Recall → Progress まで、
+一連で完了できる。データは端末内（localStorage）に保存される。
+
+次は Step 12–13（Supabase・認証）と Step 15（PWA）。
 
 ## 開発
 
