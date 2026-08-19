@@ -1,0 +1,298 @@
+# Speed Reading Lab — Data Model
+
+Phase 1（localStorage）と Phase 2（Supabase / PostgreSQL）で**同一のドメイン型**を使う。
+以下の TypeScript 型が正であり、SQL はその射影である。
+
+## 1. ドメイン型（`src/core/types`）
+
+```ts
+export type TrainingType =
+  | 'warmup' | 'speed_push' | 'chunk_reading' | 'meaning_flash'
+  | 'structure_reading' | 'prediction_reading' | 'variable_speed'
+  | 'regression_control' | 'comprehension' | 'immediate_recall' | 'delayed_recall'
+
+export type PassageCategory =
+  | 'business' | 'technology' | 'economics' | 'psychology'
+  | 'science' | 'history' | 'general'
+
+export type Difficulty = 1 | 2 | 3 | 4 | 5           // 1 Beginner … 5 Expert
+export type QuestionType = 'main_idea' | 'detail' | 'cause_effect' | 'inference' | 'structure'
+export type PassageSource = 'seed' | 'imported' | 'generated'   // 将来拡張の口
+
+export interface TrainingPassage {
+  id: string
+  title: string
+  category: PassageCategory
+  difficulty: Difficulty
+  source: PassageSource
+  content: string                 // 本文（日本語）
+  characterCount: number          // 空白・改行を除いた実文字数（導出値だが検証のため保持）
+  estimatedDifficulty: DifficultyFactors   // 難易度の内訳（§4）
+  keyPoints: string[]             // Recall の模範ポイント 3〜5件
+  paragraphs: PassageParagraph[]  // Structure Reading 用
+  chunks: string[]                // 文節/意味単位の原子（Chunk Reading 用）
+  questions: TrainingQuestion[]
+}
+
+export interface PassageParagraph {
+  index: number
+  text: string
+  /** 「結局この段落は何を言っている？」の正解と誤答 */
+  summaryChoices: { text: string; correct: boolean }[]
+  /** Prediction Reading の停止位置に使えるか */
+  predictionStop?: { prompt: string; expectedPoints: string[] }
+}
+
+export interface TrainingQuestion {
+  id: string
+  passageId: string
+  type: QuestionType
+  prompt: string
+  choices: { id: string; text: string }[]
+  correctChoiceId: string
+  explanation: string
+}
+```
+
+計測系：
+
+```ts
+export interface TrainingSession {
+  id: string
+  userId: string
+  startedAt: Date
+  completedAt: Date | null
+  durationSeconds: number | null
+  sessionType: 'baseline' | 'daily' | 'single' | 'recall'
+}
+
+export interface TrainingResult {
+  id: string
+  userId: string
+  sessionId: string
+  trainingType: TrainingType
+  passageId: string | null
+  cpm: number | null
+  comprehensionScore: number | null      // 0–100
+  immediateRecallScore: number | null    // 0–100
+  delayedRecallScore: number | null      // 0–100
+  difficulty: Difficulty | null
+  /** 行動ログ：Regression Control / Variable Speed の評価に使う */
+  backCount: number | null
+  pauseCount: number | null
+  targetCpm: number | null               // その回に指示した速度
+  valid: boolean                         // 計測として有効か（§ARCHITECTURE 6）
+  createdAt: Date
+}
+```
+
+## 2. テーブル一覧
+
+| テーブル | 種別 | 概要 |
+|---|---|---|
+| `profiles` | user | ユーザー設定・基準値 |
+| `training_passages` | content | 教材本文 |
+| `training_questions` | content | 理解度設問 |
+| `training_sessions` | user | 1回のトレーニング実施単位 |
+| `training_results` | user | セッション内の各トレーニング結果 |
+| `reading_tests` | user | Baseline / 読書速度測定の生ログ |
+| `recall_tasks` | user | 翌日 Recall のスケジュールと結果 |
+| `daily_training_plans` | user | 当日の生成済みトレーニング構成 |
+
+content 系は全ユーザー共通の読み取り専用。user 系は RLS で本人のみ。
+
+## 3. スキーマ（PostgreSQL）
+
+```sql
+-- ============ profiles ============
+create table public.profiles (
+  id                uuid primary key references auth.users(id) on delete cascade,
+  display_name      text,
+  baseline_cpm      integer check (baseline_cpm between 100 and 5000),
+  target_cpm        integer check (target_cpm  between 100 and 5000),
+  preferred_duration_minutes smallint not null default 30
+                       check (preferred_duration_minutes in (10, 20, 30)),
+  chunk_level       smallint not null default 2 check (chunk_level between 1 and 5),
+  timezone          text    not null default 'Asia/Tokyo',
+  onboarded_at      timestamptz,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+-- ============ content ============
+create table public.training_passages (
+  id               text primary key,                   -- 'biz-001' 等、seed と一致させる
+  title            text not null,
+  category         text not null check (category in
+                     ('business','technology','economics','psychology','science','history','general')),
+  difficulty       smallint not null check (difficulty between 1 and 5),
+  source           text not null default 'seed' check (source in ('seed','imported','generated')),
+  content          text not null,
+  character_count  integer not null check (character_count > 0),
+  estimated_difficulty jsonb not null,   -- DifficultyFactors
+  key_points       jsonb not null,       -- string[]
+  paragraphs       jsonb not null,       -- PassageParagraph[]
+  chunks           jsonb not null,       -- string[]
+  owner_id         uuid references auth.users(id) on delete cascade,  -- 将来の取り込み用。seed は null
+  created_at       timestamptz not null default now()
+);
+create index on public.training_passages (category, difficulty);
+
+create table public.training_questions (
+  id               text primary key,
+  passage_id       text not null references public.training_passages(id) on delete cascade,
+  type             text not null check (type in
+                     ('main_idea','detail','cause_effect','inference','structure')),
+  prompt           text not null,
+  choices          jsonb not null,       -- {id,text}[]
+  correct_choice_id text not null,
+  explanation      text not null,
+  position         smallint not null
+);
+create index on public.training_questions (passage_id, position);
+
+-- ============ sessions / results ============
+create table public.training_sessions (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references auth.users(id) on delete cascade,
+  started_at       timestamptz not null default now(),
+  completed_at     timestamptz,
+  duration_seconds integer check (duration_seconds >= 0),
+  session_type     text not null check (session_type in ('baseline','daily','single','recall')),
+  local_date       date not null            -- ユーザーTZでの実施日。streak と plan の突合に使う
+);
+create index on public.training_sessions (user_id, local_date desc);
+
+create table public.training_results (
+  id                     uuid primary key default gen_random_uuid(),
+  user_id                uuid not null references auth.users(id) on delete cascade,
+  session_id             uuid not null references public.training_sessions(id) on delete cascade,
+  training_type          text not null,
+  passage_id             text references public.training_passages(id) on delete set null,
+  cpm                    numeric(8,2) check (cpm >= 0),
+  comprehension_score    smallint check (comprehension_score      between 0 and 100),
+  immediate_recall_score smallint check (immediate_recall_score   between 0 and 100),
+  delayed_recall_score   smallint check (delayed_recall_score     between 0 and 100),
+  target_cpm             numeric(8,2),
+  back_count             integer default 0 check (back_count  >= 0),
+  pause_count            integer default 0 check (pause_count >= 0),
+  difficulty             smallint check (difficulty between 1 and 5),
+  valid                  boolean not null default true,
+  created_at             timestamptz not null default now()
+);
+create index on public.training_results (user_id, created_at desc);
+create index on public.training_results (user_id, training_type, created_at desc);
+
+-- ============ baseline / reading test ============
+create table public.reading_tests (
+  id                  uuid primary key default gen_random_uuid(),
+  user_id             uuid not null references auth.users(id) on delete cascade,
+  session_id          uuid references public.training_sessions(id) on delete cascade,
+  passage_id          text not null references public.training_passages(id),
+  is_baseline         boolean not null default false,
+  elapsed_seconds     numeric(8,2) not null check (elapsed_seconds > 0),
+  character_count     integer not null check (character_count > 0),
+  cpm                 numeric(8,2) not null,
+  comprehension_score smallint check (comprehension_score between 0 and 100),
+  recall_score        smallint check (recall_score        between 0 and 100),
+  recall_text         text,
+  created_at          timestamptz not null default now()
+);
+create index on public.reading_tests (user_id, created_at desc);
+
+-- ============ recall ============
+create table public.recall_tasks (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references auth.users(id) on delete cascade,
+  passage_id        text not null references public.training_passages(id) on delete cascade,
+  source_session_id uuid references public.training_sessions(id) on delete set null,
+  scheduled_date    date not null,                 -- ユーザーTZの「翌日」
+  expires_on        date not null,                 -- scheduled_date + RECALL_WINDOW_DAYS
+  completed_at      timestamptz,
+  recall_score      smallint check (recall_score between 0 and 100),
+  recall_text       text,
+  status            text not null default 'pending'
+                      check (status in ('pending','completed','expired')),
+  created_at        timestamptz not null default now(),
+  unique (user_id, passage_id, scheduled_date)
+);
+create index on public.recall_tasks (user_id, scheduled_date) where status = 'pending';
+
+-- ============ plan ============
+create table public.daily_training_plans (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references auth.users(id) on delete cascade,
+  plan_date         date not null,
+  total_minutes     smallint not null check (total_minutes in (10,20,30)),
+  blocks            jsonb not null,   -- PlanBlock[]（TRAINING_LOGIC.md §5）
+  target_cpm        numeric(8,2),
+  chunk_level       smallint check (chunk_level between 1 and 5),
+  generated_reason  jsonb,            -- 弱点判定の根拠。AI Coach の説明に流用
+  completed_at      timestamptz,
+  created_at        timestamptz not null default now(),
+  unique (user_id, plan_date)
+);
+```
+
+## 4. DifficultyFactors
+
+難易度は文字数だけで決めない。教材ごとに次の内訳を持たせ、`difficulty`（1–5）はこの加重和から算出する。
+
+```ts
+export interface DifficultyFactors {
+  vocabulary: 1|2|3|4|5        // 語彙の平易さ
+  sentenceLength: 1|2|3|4|5    // 一文の長さ
+  abstraction: 1|2|3|4|5       // 抽象度
+  informationDensity: 1|2|3|4|5// 情報密度
+  logicalStructure: 1|2|3|4|5  // 論理構造の複雑さ
+  domainSpecificity: 1|2|3|4|5 // 専門性
+}
+```
+
+算出は `core/metrics/difficulty.ts`（重みは `training-config.ts`）。教材の `difficulty` は算出値と ±1 以内であることをテストで検証する。
+
+## 5. RLS ポリシー
+
+```sql
+alter table public.profiles              enable row level security;
+alter table public.training_sessions     enable row level security;
+alter table public.training_results      enable row level security;
+alter table public.reading_tests         enable row level security;
+alter table public.recall_tasks          enable row level security;
+alter table public.daily_training_plans  enable row level security;
+alter table public.training_passages     enable row level security;
+alter table public.training_questions    enable row level security;
+
+-- user 系：本人のみ（select/insert/update/delete を同じ述語で）
+create policy "own rows" on public.training_results
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- 他の user 系テーブルにも同型のポリシーを作成。profiles は user_id ではなく id で判定。
+
+-- content 系：seed は全員読める。将来の取り込み教材は所有者のみ。書き込みは service_role のみ
+create policy "read seed or own" on public.training_passages
+  for select using (owner_id is null or auth.uid() = owner_id);
+create policy "read questions of readable passages" on public.training_questions
+  for select using (exists (
+    select 1 from public.training_passages p
+    where p.id = passage_id and (p.owner_id is null or auth.uid() = p.owner_id)));
+```
+
+- `profiles` は `auth.users` への insert トリガー（`handle_new_user()`）で自動生成する。
+- `updated_at` は `moddatetime` トリガーで更新する。
+- seed 投入は service_role キーを使う `supabase/seed.sql`（`scripts/generate-seed-sql.ts` が生成）。
+
+## 6. localStorage スキーマ（Phase 1）
+
+キーは `srl:v1:<entity>`。読み出し時に zod で検証し、壊れていれば破棄して初期化する（クラッシュさせない）。
+
+```
+srl:v1:profile        Profile
+srl:v1:sessions       TrainingSession[]
+srl:v1:results        TrainingResult[]
+srl:v1:reading_tests  ReadingTest[]
+srl:v1:recall_tasks   RecallTask[]
+srl:v1:plans          DailyTrainingPlan[]
+srl:v1:schema_version number
+```
+
+`schema_version` を持たせ、Phase 2 の移送（`migrateLocalToRemote`）と将来のマイグレーションに備える。
