@@ -19,6 +19,9 @@ export type Difficulty = 1 | 2 | 3 | 4 | 5           // 1 Beginner … 5 Expert
 export type QuestionType = 'main_idea' | 'detail' | 'cause_effect' | 'inference' | 'structure'
 export type PassageSource = 'seed' | 'imported' | 'generated'   // 将来拡張の口
 
+/** 予測の質。完全一致ではなく論理方向で評価する */
+export type PredictionQuality = 'correct' | 'partial' | 'miss'
+
 export interface TrainingPassage {
   id: string
   title: string
@@ -37,10 +40,22 @@ export interface TrainingPassage {
 export interface PassageParagraph {
   index: number
   text: string
+  /** この段落を構成する意味単位。ペーサー表示で段落構造を保つ */
+  chunks: string[]
   /** 「結局この段落は何を言っている？」の正解と誤答 */
-  summaryChoices: { text: string; correct: boolean }[]
-  /** Prediction Reading の停止位置に使えるか */
-  predictionStop?: { prompt: string; expectedPoints: string[] }
+  summaryChoices: { id: string; text: string; correct: boolean }[]
+  /** Prediction Reading の停止位置。choices を持つ教材だけが対象になる */
+  predictionStop?: {
+    prompt: string
+    expectedPoints: string[]
+    choices?: { id: string; text: string; quality: PredictionQuality; explanation: string }[]
+  }
+  /**
+   * Variable Speed Reading の情報価値。本文を二重に持たないよう、区間は段落単位で定義する。
+   * 全段落に付いている教材だけが Variable Speed の対象になる。
+   */
+  importance?: 'known' | 'example' | 'evidence' | 'claim' | 'key'
+  recommendedBand?: 'fast' | 'normal' | 'slow'
 }
 
 export interface TrainingQuestion {
@@ -73,16 +88,62 @@ export interface TrainingResult {
   trainingType: TrainingType
   passageId: string | null
   cpm: number | null
-  comprehensionScore: number | null      // 0–100
+  comprehensionScore: number | null      // 0–100（文章の理解度に限る）
   immediateRecallScore: number | null    // 0–100
   delayedRecallScore: number | null      // 0–100
+  /**
+   * トレーニング固有の正答率・一致率（0–100）。
+   * Meaning Flash の意味把握、Prediction の予測妥当性、Variable Speed の一致率。
+   * comprehensionScore と分けている理由：同じ列に入れると Skill Profile の
+   * 測定源が混ざり、どの能力を測った値か区別できなくなるため。
+   */
+  accuracyScore: number | null
+  exposureMs: number | null              // Meaning Flash の表示時間
+  level: ChunkLevel | null               // Chunk Reading / Meaning Flash のレベル
   difficulty: Difficulty | null
-  /** 行動ログ：Regression Control / Variable Speed の評価に使う */
+  /** 行動ログ：Regression Control の評価に使う */
   backCount: number | null
   pauseCount: number | null
   targetCpm: number | null               // その回に指示した速度
   valid: boolean                         // 計測として有効か（§ARCHITECTURE 6）
   createdAt: Date
+}
+```
+
+### Skill Profile（保存しない導出値）
+
+```ts
+export type SkillId =
+  | 'reading_speed' | 'chunk_recognition' | 'meaning_extraction'
+  | 'structure_recognition' | 'prediction' | 'adaptive_reading'
+  | 'comprehension' | 'immediate_recall' | 'delayed_recall'
+
+export type SkillState = 'unmeasured' | 'weak' | 'normal' | 'strong'
+
+export interface SkillMeasurement {
+  id: SkillId
+  score: number | null      // 未測定は null（0 で埋めない）
+  state: SkillState
+  sampleCount: number
+  trend: number | null      // 後半平均 − 前半平均
+}
+```
+
+Skill Profile は `training_results` と `recall_tasks` から**毎回算出する**。
+テーブルには持たない。判定基準を変えたときに過去の記録と食い違わないようにするため。
+
+### Baseline Profile（profiles に保存）
+
+```ts
+export interface BaselineProfile {
+  cpm: number | null              // 有効な測定の中央値
+  comprehension: number | null
+  mainIdea: number | null         // 設問タイプ別の内訳
+  causeEffect: number | null
+  structure: number | null
+  immediateRecall: number | null
+  attempts: number
+  updatedAt: string | null
 }
 ```
 
@@ -110,9 +171,15 @@ create table public.profiles (
   display_name      text,
   baseline_cpm      integer check (baseline_cpm between 100 and 5000),
   target_cpm        integer check (target_cpm  between 100 and 5000),
+  -- 理解の内訳と想起まで含めた現在地（CPM は有効な測定の中央値）
+  baseline_profile  jsonb,
+  -- Baseline で使用済みの教材。再測定で同じ文章を出さないために持つ
+  used_baseline_passage_ids text[] not null default '{}',
   preferred_duration_minutes smallint not null default 30
                        check (preferred_duration_minutes in (10, 20, 30)),
   chunk_level       smallint not null default 2 check (chunk_level between 1 and 5),
+  meaning_flash_level smallint not null default 2
+                       check (meaning_flash_level between 1 and 5),
   timezone          text    not null default 'Asia/Tokyo',
   onboarded_at      timestamptz,
   created_at        timestamptz not null default now(),
@@ -173,6 +240,10 @@ create table public.training_results (
   comprehension_score    smallint check (comprehension_score      between 0 and 100),
   immediate_recall_score smallint check (immediate_recall_score   between 0 and 100),
   delayed_recall_score   smallint check (delayed_recall_score     between 0 and 100),
+  -- トレーニング固有の正答率・一致率（Meaning Flash / Prediction / Variable Speed）
+  accuracy_score         smallint check (accuracy_score           between 0 and 100),
+  exposure_ms            integer  check (exposure_ms >= 0),
+  level                  smallint check (level between 1 and 5),
   target_cpm             numeric(8,2),
   back_count             integer default 0 check (back_count  >= 0),
   pause_count            integer default 0 check (pause_count >= 0),
@@ -196,6 +267,8 @@ create table public.reading_tests (
   comprehension_score smallint check (comprehension_score between 0 and 100),
   recall_score        smallint check (recall_score        between 0 and 100),
   recall_text         text,
+  -- 設問タイプ別の正答率。Baseline Profile の内訳を作る元になる
+  type_scores         jsonb,
   created_at          timestamptz not null default now()
 );
 create index on public.reading_tests (user_id, created_at desc);
@@ -292,7 +365,20 @@ srl:v1:results        TrainingResult[]
 srl:v1:reading_tests  ReadingTest[]
 srl:v1:recall_tasks   RecallTask[]
 srl:v1:plans          DailyTrainingPlan[]
-srl:v1:schema_version number
 ```
 
-`schema_version` を持たせ、Phase 2 の移送（`migrateLocalToRemote`）と将来のマイグレーションに備える。
+### 後方互換の扱い
+
+フィールドを追加するときはキーを上げず、**読み出し時に既定値を与える**。
+端末に残っている記録を捨てないためであり、実際に次の移送を行っている。
+
+| 旧 | 新 | 扱い |
+|---|---|---|
+| `results[].chunkLevel` | `results[].level` | 読み出し時に移送する |
+| （なし） | `results[].accuracyScore` / `exposureMs` | 既定値 `null` |
+| （なし） | `profile.baselineProfile` | 既定値 `null`（`baselineCpm` のみで動作する） |
+| （なし） | `profile.usedBaselinePassageIds` | 既定値 `[]` |
+| （なし） | `profile.meaningFlashLevel` | 既定値 2 |
+| （なし） | `reading_tests[].typeScores` | 既定値 `null` |
+
+スキーマに合わない行は破棄して初期化する（過去の壊れたデータでアプリが起動しなくなるのを避ける）。

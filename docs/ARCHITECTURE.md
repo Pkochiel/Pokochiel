@@ -88,9 +88,13 @@ data/       教材コンテンツ／永続化（Repository 実装）— core の
 │  │     └─ recall/page.tsx
 │  ├─ core/                          # ← React 非依存
 │  │  ├─ config/training-config.ts   # すべての閾値・係数（Magic Number 禁止の受け皿）
-│  │  ├─ types/                      # domain types（passage / session / result / plan ...）
-│  │  ├─ metrics/                    # cpm / comprehension / recall / ers / skill-radar
-│  │  ├─ adaptive/                   # speed adaptation / weakness detection
+│  │  ├─ types/                      # domain types（passage / session / result / plan / skill）
+│  │  ├─ metrics/                    # cpm / comprehension / recall / ers / baseline-profile
+│  │  │                              #  / skill-profile / dashboard-stats / progress-series
+│  │  ├─ training/                   # 各トレーニングの評価ロジック
+│  │  │                              #  meaning-flash / prediction / variable-speed / regression
+│  │  ├─ feedback/                   # 結果に対する助言の生成（AI 置換可能）
+│  │  ├─ adaptive/                   # speed adaptation / training selection
 │  │  ├─ planner/                    # daily training plan generation
 │  │  ├─ scheduler/                  # next-day recall scheduling
 │  │  ├─ chunking/                   # 日本語チャンク分割（levels / segment / merge）
@@ -200,6 +204,18 @@ Phase 2 では、ログイン時にローカルデータを一度だけ移送す
 
 E2E は時間依存を避けるため、`?e2e=1` 時にトレーニング時間短縮とペーサー高速化を許すテストフック（`core/config` の値を上書きするだけ）を用意する。プロダクション経路には影響させない。
 
+## 9-b. 差し替えを前提にしたインタフェース
+
+将来 AI に置き換える箇所は、先にインタフェースとして切ってある。
+実装を差し替えるだけで済み、UI と保存処理は変更しない。
+
+| インタフェース | 現行の実装 | 将来 |
+|---|---|---|
+| `RecallEvaluator` | Key Point の照合（`keyPointRecallEvaluator`） | LLM による意味的一致度の評価 |
+| `FeedbackGenerator` | ルールベース（`ruleBasedFeedback`） | AI Coach |
+| `TrainingRepository` | `LocalStorageRepository` | `SupabaseRepository` |
+| `ContentProvider`（予定） | Seed 教材の静的 import | AI 生成・ユーザー取り込み |
+
 ## 10. Phase 計画とアーキテクチャ上の対応
 
 | Phase | 内容 | アーキテクチャ上の要点 |
@@ -209,6 +225,10 @@ E2E は時間依存を避けるため、`?e2e=1` 時にトレーニング時間�
 | 3 | 適応型トレーニング | `core/adaptive` + `core/planner` を実データで駆動 |
 | 4 | AI コンテンツ生成 / Recall 評価 | `Segmenter` と `RecallEvaluator` をインタフェース経由で差し替え |
 | 5 | PWA・スマホ最適化 | `manifest.ts` + SW（教材と直近プランのオフラインキャッシュ） |
+
+**Phase 1.5（完了）：** 認知処理の各段を鍛えるトレーニングと測定品質。
+Skill Profile を導入し、Daily Training の構成を Skill Profile から決めるようにした。
+永続化・認証・PWA・AI には手を付けていない。
 
 **将来拡張（MVP では実装しない）：** ユーザー自身の Web 記事 / PDF / Kindle メモ / Obsidian ノートの取り込み。
 `PassageSource` 型（`seed` | `imported` | `generated`）と `ContentProvider` インタフェースだけ先に定義し、取り込み実装の追加でアーキテクチャが揺れないようにしておく。

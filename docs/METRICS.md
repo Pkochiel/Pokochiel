@@ -1,0 +1,185 @@
+# Speed Reading Lab — Metrics
+
+このアプリが記録する指標の定義と目的をまとめる。
+実装は `src/core/metrics/` と `src/core/training/` にあり、すべてユニットテストで固定してある。
+
+**指標を増やす前に確認すること：** その数値は「どの認知能力が改善したか」を示すか。
+示さないなら、それは表示する理由がない。
+
+---
+
+## 1. CPM（Characters Per Minute）
+
+```
+CPM = 本文文字数 ÷ 読書秒数 × 60
+```
+
+| 項目 | 内容 |
+|---|---|
+| 目的 | 読む速度そのもの |
+| 測る場面 | Baseline / Warm-up / Speed Push / Regression Control |
+| 実装 | `core/metrics/cpm.ts` |
+
+- `本文文字数` は空白・改行を除いた実文字数。教材側で確定し、実行時に再計算しない
+- `読書秒数` は `performance.now()` の実測から、**ポーズ時間とタブ非表示時間を差し引いた**値
+- **速度単体では評価しない。** 理解と想起を伴わない CPM は Skill Profile 上でも加点されない
+
+## 2. Comprehension（理解度）
+
+```
+Comprehension = 正答数 ÷ 出題数 × 100
+```
+
+設問は5種類（Main Idea / Detail / Cause & Effect / Inference / Structure）。
+教材は「5問以上・4種以上・Inference を必ず含む」ことをデータ検証テストで強制している。
+暗記だけで解ける設問セットにしないための制約。
+
+**タイプ別の内訳**（`byType`）も同時に算出する。Baseline Profile の
+Main Idea / Cause & Effect / Structure はこの内訳から作る。
+
+## 3. Recall（想起）
+
+| 種類 | いつ測るか | 主要な値 |
+|---|---|---|
+| Immediate Recall | 読了直後 | Key Point の照合 |
+| Delayed Recall | 翌日 | 同上 |
+
+```
+Recall Score = 思い出せた Key Point 数 ÷ Key Point 総数 × 100
+```
+
+- 手順は固定：**本文を隠す → 記述を確定する → Key Points を表示する → 照合する**
+  順序を変えると、模範解答を見てから書けてしまい、想起の測定にならない
+- **自己評価（0/25/50/75/100）は補助指標**。主要値を上書きしない
+- 評価は `RecallEvaluator` インタフェース経由。将来 LLM による意味的一致度の
+  評価に差し替える際も、UI と保存処理は変更しない
+- 翌日 Recall は `scheduledDate` から3日で期限切れ。遅れて答えた結果は長期記憶の指標に混ぜない
+
+## 4. Skill Profile（主要指標）
+
+9つの認知能力を**独立に**評価する。Daily Training の構成を決めるためのドメインモデルであり、
+表示のためだけの数値ではない。
+
+| Skill | 鍛える能力 | 測定源 |
+|---|---|---|
+| Reading Speed | 文字を追う速度 | Speed Push / Regression Control の CPM ÷（Baseline × 2） |
+| Chunk Recognition | 意味のまとまりで認識する | Chunk Reading の正答率 × レベル係数 |
+| Meaning Extraction | 短い露出から意味を取り出す | Meaning Flash の正答率 × レベル係数 |
+| Structure Recognition | 段落の役割を掴む | Structure Reading の段落要旨の正答率 |
+| Prediction | 次の展開を予測する | Prediction Reading の予測スコア |
+| Adaptive Reading | 重要度に応じて速度を変える | Variable Speed の推奨帯との一致率 |
+| Comprehension | 読んだ内容を答えられる | Comprehension Test / Speed Push の正答率 |
+| Immediate Recall | 直後に取り出せる | Immediate Recall のスコア |
+| Delayed Recall | 翌日に取り出せる | 完了した Recall タスクのスコア |
+
+### 状態（4値）
+
+```
+unmeasured  サンプルが2件未満。まだ測っていない
+weak        55 未満
+normal      55 以上 80 未満
+strong      80 以上
+```
+
+**`unmeasured` を 0 点（＝最弱）として扱わない。**
+未測定を弱点と混同すると、新規ユーザーの構成が「全部が弱点」となり、
+実際には測っていない能力に時間を割いてしまう。
+
+配分の優先順位は `weak > unmeasured > normal > strong`。
+既知の弱点の解消を最優先し、その次に「測ること自体」を優先する。
+
+### レベル係数
+
+同じ正答率でも、高いレベルで達成したほうが能力は高い。
+
+```
+levelFactor = 0.6 + 0.4 × (level − 1) ÷ 4
+```
+
+レベル1でも 0 にはしない（正答している事実自体が能力の証拠であるため）。
+
+## 5. ERS（Effective Reading Score）— 参考値
+
+```
+ERS = CPM × comprehension(0–1) × recall(0–1)
+```
+
+| 項目 | 内容 |
+|---|---|
+| 目的 | 速度・理解・記憶を一つにまとめた**参考値** |
+| 位置づけ | **総合能力指標ではない。** 主要指標は Skill Profile |
+
+**この式の既知の性質（ユニットテストで固定済み）:**
+
+- CPM に対して**線形**であり、上限がない
+- したがって極端な CPM がスコアを過剰に押し上げる
+  （例：4,000 CPM・理解 60%・想起 50% が、700 CPM・理解 100%・想起 100% を上回る）
+- 理解または想起が 0 なら、CPM がいくら高くても 0 になる
+- いずれかが欠損していれば `null`。0 や 1 で埋めない
+
+この性質のため、ERS は Dashboard でも Session Result でも
+「参考値」と明記し、必ず内訳（CPM / 理解 / 想起）と併記する。
+
+### 正規化 ERS の検討案（未実装）
+
+現行の式は変更していない。以下は今後の検討案として記録しておく。
+
+```
+normalizedERS = min(1, CPM ÷ (Baseline CPM × 2)) × comprehension(0–1) × recall(0–1) × 100
+```
+
+| 論点 | 内容 |
+|---|---|
+| 利点 | 0–100 に収まり、極端な CPM が支配しない。Skill Profile と同じ尺度で並べられる |
+| 利点 | 個人の Baseline に対する相対値になるため、ユーザー間で意味が揃う |
+| 欠点 | Baseline 未測定では算出できない |
+| 欠点 | 上限に達した後は速度の伸びが反映されない（Reading Speed 軸と役割が重複する） |
+| 判断 | Skill Profile が主要指標である以上、ERS を精緻化する優先度は高くない。<br>導入するなら現行 ERS と併記せず、置き換える形にする |
+
+## 6. Valid / Invalid measurement
+
+計測が壊れていると、以降の速度適応と Skill Profile がすべて狂う。
+そのため次の条件で `valid = false` とし、**記録は残すが統計・適応計算から除外する**。
+
+| 条件 | 理由 |
+|---|---|
+| 読書秒数 < 3 秒 | 誤タップ・スキップ |
+| CPM > 6,000 | 本文の分量に対して速すぎる（読んでいない） |
+| 読書秒数 ≤ 0 または 文字数 ≤ 0 | 計測できていない |
+
+- 無効な計測では Baseline の基準値を書き換えない
+- 理由（`too_short` / `implausible` / `no_elapsed`）を区別し、UI では別々の文言で伝える
+- タブが非表示の間は計測を停止する。これがないと放置で CPM が容易に汚染される
+
+## 7. Baseline Profile
+
+```
+CPM              有効な測定の中央値
+Comprehension    平均
+Main Idea        設問タイプ別の平均
+Cause & Effect   同上
+Structure        同上
+Immediate Recall 平均
+attempts         有効な測定回数
+```
+
+**CPM だけ中央値を採る。** 1回だけ極端に速い／遅い測定が混じったとき、
+平均ではそれ以降のすべてのトレーニングの基準が引きずられるため。
+理解と想起は 0–100 に収まる値であり、外れ値の影響が小さいので平均でよい。
+
+再測定では**まだ使っていない教材**を出す。同じ文章を再度読むと、
+内容の記憶によってスコアが押し上げられ、現在地の測定にならない。
+
+## 8. その他の記録
+
+| 値 | 用途 |
+|---|---|
+| `backCount` / `pauseCount` | Regression Control の評価。回数だけでは良し悪しを判断せず、理解度と対で見る |
+| `accuracyScore` | Meaning Flash / Prediction / Variable Speed のトレーニング固有スコア |
+| `exposureMs` | Meaning Flash の表示時間 |
+| `level` | Chunk Reading / Meaning Flash のレベル |
+| `targetCpm` | その回に指示した速度 |
+
+`comprehensionScore` は「文章の理解度」に限って使い、
+トレーニング固有の正答率は `accuracyScore` に分けている。
+両者を同じ列に入れると、Skill Profile の測定源が混ざって意味が壊れる。

@@ -125,56 +125,73 @@ ERS = CPM × comprehension01 × recall01
 generateDailyPlan(input: {
   date: LocalDate
   totalMinutes: 10 | 20 | 30
-  stats: UserStatsSnapshot     // 直近実績（純粋な入力。DB 参照はしない）
-  passages: TrainingPassage[]  // 選択候補
-  dueRecallTasks: RecallTask[]
+  profile: SkillProfile        // 9スキルの状態（純粋な入力）
+  passages: PassageCandidate[] // 各トレーニングに対応できるかのフラグを持つ
+  recentPassageIds: string[]
+  dueRecallCount: number
+  targetCpm / chunkLevel / meaningFlashLevel / preferredDifficulty
 }): DailyTrainingPlan
 ```
 
-手順：
+### 構成の考え方：コア + 任意ブロック
 
-1. **翌日 Recall を最優先**。`dueRecallTasks` があれば、プラン先頭に `delayed_recall` ブロックを差し込む（1〜2分）。
-2. `PLAN.presets[totalMinutes]` をベース配分とする。
-3. 弱点スコア（§6）を算出し、`PLAN.reallocationRatio × totalMinutes` 分を上位の弱点ブロックへ移す。
-   - 供出元は強い順、受け取りは弱い順。`blockMinMinutes` を下回らせない。
-   - 同点時はブロック定義順で解決し、**同じ入力からは常に同じプランが出る**（決定的）。
-4. 目標速度 `targetCpm` を §7 で決定。
-5. 教材選択：直近 N 日に使った `passageId` を除外し、`difficulty` がユーザーの理解度レンジに合うものから選ぶ。
-   同一セッション内では Speed Push / Chunk / Structure に**別々の教材**を割り当てる（Comprehension と Immediate Recall は Structure と同一教材を共有する ＝ 読んだものを問う）。
-6. 生成理由（`generated_reason`）を残す。Phase 4 の AI Coach はこれを説明文に変換するだけでよい。
+全トレーニングを毎日詰め込むと、1つあたりが短くなりすぎて訓練にならない。
+そのため**毎日必ず行うコア**と、**Skill Profile に応じて選ぶ任意ブロック**に分ける。
 
-```ts
-interface PlanBlock {
-  order: number
-  type: TrainingType
-  minutes: number
-  passageId?: string
-  targetCpm?: number
-  chunkLevel?: 1|2|3|4|5
-  reason?: string
-}
+| 区分 | トレーニング | 30分 | 20分 | 10分 |
+|---|---|---|---|---|
+| コア | Warm-up | 2 | 1 | 1 |
+| コア | Speed Push | 5 | 4 | 2 |
+| コア | Structure Reading | 6 | 4 | 2 |
+| コア | Comprehension Test | 4 | 3 | 2 |
+| コア | Immediate Recall | 4 | 3 | 1 |
+| 任意 | 予算（合計） | 9 | 5 | 2 |
+
+任意ブロックの候補と、それが鍛えるスキル：
+
+```
+Meaning Flash       → Meaning Extraction
+Chunk Reading       → Chunk Recognition
+Prediction Reading  → Prediction
+Variable Speed      → Adaptive Reading
+Regression Control  → Reading Speed
 ```
 
-## 6. 弱点判定（Weakness Detection）
+### 選択の手順
 
-直近 `SCORING.recentWindow` 件の有効な結果から、6軸を 0–100 に正規化する（Skill Radar と同じ値を使う）。
+1. 翌日 Recall があれば、プラン先頭に差し込む（コアの外側・2分）
+2. コア配分をベースとし、弱点に応じて時間を移す（供出元はベース配分の半分を保持）
+3. 任意ブロックを **weak > unmeasured > normal > strong** の順で選ぶ
+   - 既知の弱点の解消を最優先し、その次に「まだ測っていない」を優先する
+   - 同順位のときは日付由来の回転で順番を変え、同じ内容が毎日続かないようにする
+   - 対応教材がないトレーニング（Prediction の停止位置、Variable Speed の区間定義）は候補から外す
+4. 予算を選ばれたブロックへ分配（1ブロック 2〜5分）
+5. 教材を割り当てる。Speed Push / Chunk / Prediction / Variable Speed / Regression には別々の教材、
+   Comprehension と Immediate Recall は Structure Reading と同じ教材（読んだものを問う）
+6. 生成理由（`generatedReason`）を残す
 
-| 軸 | 算出 |
+**合計時間は必ず `totalMinutes` に一致する。** 同じ入力からは常に同じ構成が出る（乱数を使わない）。
+
+### コア配分の重み付け（明示ルール）
+
+| 状況 | 対応 |
 |---|---|
-| Reading Speed | `clamp01(meanCpm / (baselineCpm × skillRadarSpeedCeiling)) × 100` |
-| Chunking | Chunk Reading の正答率 × `level / 5` を 0–100 に |
-| Structure | Structure Reading の段落要旨正答率 |
-| Comprehension | 理解度テストの平均 |
-| Recall | `immediate × (1 - delayedRecallWeight) + delayed × delayedRecallWeight` |
-| Adaptive Reading | Variable Speed で「推奨速度帯と一致した区間の割合」 |
+| Reading Speed 弱 かつ Comprehension 中〜強 | Speed Push を増やす |
+| Reading Speed 強 かつ Comprehension 弱 | **Speed Push を増やさない。** Structure Reading と Comprehension を増やす |
+| Structure Recognition 弱 | Structure Reading を増やす |
+| Immediate / Delayed Recall 弱 | **速度を落とすのではなく** Recall と Structure Reading を増やす |
 
-弱点スコア = `100 - 軸スコア`。データが不足している軸（有効サンプル < 2）は**中央値扱い（50）**とし、極端な配分を避ける。
+**速度を上げることを常に成功とみなさない。** 上の2行目と4行目がその担保である。
 
-配分ルール（仕様の明示要件）：
+## 6. Skill Profile（弱点判定の土台）
 
-- Recall が `RECALL.lowRecallThreshold` 未満 → **速度を極端に下げるのではなく**、`immediate_recall` と `structure_reading` の配分を増やす。
-- Chunking が弱い → `chunk_reading` の配分を増やす。
-- Comprehension が低い → `structure_reading` と `comprehension` を増やし、速度は §7 で下げる。
+9スキルの定義・測定源・状態の分類は [METRICS.md](METRICS.md) §4 を参照。
+
+配分に使う際の要点：
+
+- `unmeasured` を弱点として扱わない（未測定と「測ったうえで弱い」は別）
+- 実測が1つもない新規ユーザーには、コアの標準配分をそのまま使う
+- 同じスコアでも高いレベルで達成したほうが高く評価される（レベル係数）
 
 ## 7. 速度適応（Speed Adaptation）
 
@@ -220,18 +237,46 @@ displayMs = clamp(chunkChars / (targetCpm / 60) * 1000, minDisplayMs, maxDisplay
 
 ## 9. 各トレーニングの評価定義
 
-| # | Training | 目的 | 記録する値 |
-|---|---|---|---|
-| 01 | Speed Push | 普段より少し速い速度で読む経験を作る | cpm, targetCpm, comprehension |
-| 02 | Chunk Reading | 文字単位でなく意味のまとまりで認識する | chunkLevel, accuracy, displayMs |
-| 03 | Meaning Flash | 意味抽出速度（文字列記憶ではない） | accuracy, exposureMs |
-| 04 | Structure Reading | 段落の主張を掴む（速読の中核） | 段落要旨の正答率 |
-| 05 | Prediction Reading | 仮説を持って読む | 予測入力、自己一致度 |
-| 06 | Variable Speed | 重要度に応じて速度を変える | 区間ごとの選択速度と推奨帯の一致率 |
-| 07 | Regression Control | 無駄な読み戻りの抑制（禁止はしない） | backCount, pauseCount, cpm |
-| 08 | Comprehension Test | 理解の測定 | 0–100 |
-| 09 | Immediate Recall | 直後想起 | 0–100 + テキスト |
-| 10 | Next-day Recall | 長期記憶 | 0–100 + テキスト |
+| # | Training | 鍛える認知能力 | 何で測るか | 記録する値 |
+|---|---|---|---|---|
+| 00 | Warm-up | 読む姿勢への切り替え | 測らない | cpm |
+| 01 | Speed Push | Reading Speed | 目標速度で読み、直後に理解度を確認 | cpm, targetCpm, comprehension |
+| 02 | Chunk Reading | Chunk Recognition | チャンク表示後の理解度 × レベル | level, comprehension |
+| 03 | Meaning Flash | Meaning Extraction | 短時間露出後の意味選択の正答率 | accuracyScore, exposureMs, level |
+| 04 | Structure Reading | Structure Recognition | 段落要旨の正答率 | comprehension |
+| 05 | Prediction Reading | Prediction | 予測の論理方向と論点の合致 | accuracyScore |
+| 06 | Variable Speed | Adaptive Reading | 区間ごとの選択速度と推奨帯の一致率 | accuracyScore |
+| 07 | Regression Control | Reading Speed（無駄な読み戻りの抑制） | 読み戻り密度 × 理解度 | backCount, pauseCount, cpm, comprehension |
+| 08 | Comprehension Test | Comprehension | 5種の設問の正答率 | comprehension |
+| 09 | Immediate Recall | Immediate Recall | Key Point の照合 | immediateRecallScore |
+| 10 | Next-day Recall | Delayed Recall | 同上（翌日） | recallScore（recall_tasks） |
+
+### 各トレーニングの評価の要点
+
+**Meaning Flash**（`core/training/meaning-flash.ts`）
+設問は必ず「言いたかったことは何か」を問い、語句の再生を問わない。
+表示時間はレベルで決まり、下限 800ms を下回らない（極端なフラッシュ表示をしない）。
+正答率でレベルを上下させる ＝ 速さそのものではなく「速くしても意味が取れるか」を上げる。
+
+**Prediction Reading**（`core/training/prediction.ts`）
+完全一致を求めない。`correct`（論点まで一致）100点、`partial`（論理方向は一致）50点、`miss` 0点。
+自由記述には加点するが、これは正確さではなく「予測を言語化したこと」への加点。
+
+**Variable Speed Reading**（`core/training/variable-speed.ts`）
+区間の情報価値（known / example / evidence / claim / key）に対する推奨帯との一致率で採点。
+一致 100点、隣接帯 50点、正反対 0点。**主張・核心を fast で通過した場合は追加減点。**
+全区間を速く読んでも 50点未満にしかならない ＝ CPM 競争にならない。
+
+**Regression Control**（`core/training/regression.ts`）
+読み戻しは禁止しない。読み戻り密度（1000字あたりの回数）と理解度を対で評価する。
+
+```
+読み戻り減 かつ 理解度維持        → improved
+読み戻り減 だが 理解度が15pt以上低下 → too_fast（取りこぼしたまま進んでいる）
+読み戻りが1000字あたり8回超       → needs_more_control
+```
+
+回数の少なさだけでは良いと判断しない。
 
 **Regression Control の設計原則：読み戻りを禁止しない。** ユーザーが必要と判断すれば戻れる。
 結果画面で Back 回数 / Pause 回数 / 速度を提示し、判断材料を返すに留める。
@@ -258,19 +303,48 @@ scheduleRecallTasks(input: { passageId, sessionId, completedOn: LocalDate, timez
 - 1日に複数セッションを実施しても 1 とカウントする。
 - **速度だけを伸ばすゲームにしないため**、Streak は「完了したセッション」に対して付与し、記録更新には紐付けない。
 
+## 11-b. トレーニング後のフィードバック
+
+`core/feedback/feedback.ts`。スコアの再掲ではなく「次に何を変えるか」を1〜2文で返す。
+
+| 状況 | 返す内容 |
+|---|---|
+| 速度上昇 かつ 理解維持 | 肯定（この速度帯が身についてきている） |
+| 速度上昇 かつ 理解低下 | 注意（次回は速度を戻す） |
+| Variable Speed で主張を速く通過 | 注意（どこで落とすべきだったか） |
+| Meaning Extraction 強 かつ Delayed Recall 弱 | 注意（直後に書き出す時間を増やす） |
+| Reading Speed 強 かつ Comprehension 弱 | 注意（速度は上げない） |
+
+**速度が上がったこと自体を成果として扱わない。** 理解が落ちていれば肯定的な文言を返さない。
+`FeedbackGenerator` インタフェース経由で呼ぶため、AI Coach への差し替えは実装の入れ替えだけで済む。
+
 ## 12. ユニットテスト対象（必須）
 
 ```
-core/metrics/cpm.test.ts               CPM 計算・invalid 判定・境界値
-core/metrics/ers.test.ts               ERS 計算・欠損時 null・0〜1 変換
-core/metrics/difficulty.test.ts        DifficultyFactors → difficulty の整合
-core/metrics/skill-radar.test.ts       6軸正規化・サンプル不足時の 50 扱い
-core/adaptive/speed.test.ts            閾値 0.85 / 0.7、クランプ、サンプル不足時 hold
-core/adaptive/weakness.test.ts         低 Recall 時に速度を落とさず配分を変えること
-core/planner/daily-plan.test.ts        合計分数の保存、決定性、最小分数、Recall 差し込み
-core/scheduler/recall-schedule.test.ts 翌日算出・TZ・期限切れ・重複防止
-core/chunking/segment.test.ts          レベル別の窓、意味単位を割らないこと、下限表示時間
-core/session/reducer.test.ts           セッション進行（開始→各ブロック→結果）の遷移
+core/metrics/cpm.test.ts                     CPM 計算・invalid 判定・境界値
+core/metrics/ers.test.ts                     ERS 計算・欠損時 null・極端な CPM の影響
+core/metrics/baseline-profile.test.ts        中央値・外れ値の除外・タイプ別内訳・再測定
+core/metrics/recall.test.ts                  Key Point 照合・自己評価が主要値を上書きしないこと
+core/metrics/skill-profile.test.ts           4状態の分類・未測定の扱い・レベル係数・傾向
+core/metrics/difficulty.test.ts              DifficultyFactors → difficulty の整合
+core/adaptive/speed.test.ts                  閾値 0.85 / 0.7、クランプ、サンプル不足時 hold
+core/adaptive/training-selection.test.ts     弱点優先・未測定の優先度・回転・コア重み付け
+core/planner/daily-plan.test.ts              合計分数の保存、決定性、教材の対応、弱点反映
+core/training/meaning-flash.test.ts          露出時間の下限・レベル昇降
+core/training/prediction.test.ts             論理方向の部分点・記述加点・上限
+core/training/variable-speed.test.ts         一致率・主張の読み飛ばし減点・速読で高得点にならないこと
+core/training/regression.test.ts             読み戻り減 × 理解低下 → too_fast の判定
+core/feedback/feedback.test.ts               速度上昇を無条件に肯定しないこと・差し替え可能性
+core/scheduler/recall-schedule.test.ts       翌日算出・TZ・期限切れ・重複防止
+core/chunking/segment.test.ts                レベル別の窓、意味単位を割らないこと、下限表示時間
+core/session/baseline-flow.test.ts           記述確定前に Key Points を見せないこと
+core/session/timer.test.ts                   ポーズ・非表示中の除外
 ```
 
-E2E（Playwright）：`Baseline → Dashboard → Training → Result` が完走すること。
+E2E（Playwright）：
+
+- `Baseline → 理解度8問 → Key Point 照合 → 結果` が完走し、理解の内訳まで保存されること
+- 2回目の Baseline で別の教材が出ること
+- `Daily Training`（Meaning Flash / Prediction / Variable Speed を含む）→ `Recall` → `Dashboard`
+  が完走し、各トレーニングの結果が保存されること
+- Progress のチャートと Skill Profile が表示され、表形式でも確認できること

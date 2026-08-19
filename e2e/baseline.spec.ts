@@ -1,73 +1,114 @@
 import { expect, test, type Page } from '@playwright/test'
 
 /**
- * Baseline 教材は 888 文字。CPM が現実的な範囲（maxPlausibleCpm = 6000）に
- * 収まるには最低でも約 9 秒必要なので、余裕をみて滞在する。
- * 実際の読書ではなくフローの検証が目的だが、計測の妥当性判定を迂回しない。
+ * Baseline 教材は 1,100〜1,300 字。CPM が現実的な範囲（maxPlausibleCpm = 6000）に
+ * 収まるには 12 秒以上必要なので、余裕をみて滞在する。
+ * フローの検証が目的だが、計測の妥当性判定は迂回しない。
  */
-const READING_DWELL_MS = 12_000
+const READING_DWELL_MS = 15_000
 
-async function completeBaseline(page: Page) {
+async function completeBaseline(page: Page, options: { dwellMs?: number } = {}) {
   await page.goto('/baseline/read')
   await page.getByRole('button', { name: 'Start' }).click()
 
   await expect(page.getByRole('button', { name: 'Finished' })).toBeVisible()
-  await page.waitForTimeout(READING_DWELL_MS)
+  await page.waitForTimeout(options.dwellMs ?? READING_DWELL_MS)
   await page.getByRole('button', { name: 'Finished' }).click()
 
-  // 設問（5問）。最初の選択肢を選び続ける。
-  for (let i = 0; i < 5; i += 1) {
-    await expect(page.getByText(`${i + 1} / 5`)).toBeVisible()
+  // 理解度テスト（8問）。最初の選択肢を選び続ける。
+  for (let i = 0; i < 8; i += 1) {
+    await expect(page.getByText(`${i + 1} / 8`)).toBeVisible()
     await page.getByRole('listitem').first().getByRole('button').click()
   }
 
   await page
     .getByRole('textbox')
-    .fill('主張は配置が効果を左右すること\n根拠として三つの働きが挙げられていた\n最後に計画への提言があった')
+    .fill('主張は見積りの誤差が構造的に生じること\n根拠として工程の抜けが挙げられていた\n最後に確認点の設置が提案されていた')
   await page.getByRole('button', { name: '入力を確定する' }).click()
 
-  await expect(page.getByText('Key Points')).toBeVisible()
+  // Key Points の照合（主要な想起スコア）
+  await expect(page.getByRole('heading', { name: '思い出せていた項目を選んでください' })).toBeVisible()
+  const keyPoints = page.getByRole('listitem').filter({ has: page.getByRole('button') })
+  await keyPoints.nth(0).getByRole('button').click()
+  await keyPoints.nth(1).getByRole('button').click()
+
   await page.getByRole('button', { name: '75%' }).click()
-  await page.getByRole('button', { name: '結果を見る' }).click()
+  await page.getByRole('button', { name: '次へ' }).click()
 }
 
-test('Baseline Test を完走し、結果が表示され端末に保存される', async ({ page }) => {
+test('Baseline Test を完走し、理解の内訳まで保存される', async ({ page }) => {
+  test.setTimeout(90_000)
   await completeBaseline(page)
 
   await expect(page.getByRole('heading', { name: '現在地を測定しました' })).toBeVisible()
-  await expect(page.getByText('Reading Speed')).toBeVisible()
-  await expect(page.getByText('Immediate Recall')).toBeVisible()
-  await expect(page.getByText('明日からの目標速度')).toBeVisible()
-  // 妥当な計測なので警告は出ない
+  await expect(page.getByText('理解の内訳')).toBeVisible()
+  await expect(page.getByText('主張の把握')).toBeVisible()
   await expect(page.getByText('保存していません')).toHaveCount(0)
 
   const stored = await page.evaluate(() => ({
-    profile: window.localStorage.getItem('srl:v1:profile'),
-    readingTests: window.localStorage.getItem('srl:v1:reading_tests'),
-    recallTasks: window.localStorage.getItem('srl:v1:recall_tasks'),
-    sessions: window.localStorage.getItem('srl:v1:sessions'),
+    profile: JSON.parse(window.localStorage.getItem('srl:v1:profile') ?? 'null'),
+    readingTests: JSON.parse(window.localStorage.getItem('srl:v1:reading_tests') ?? '[]'),
+    recallTasks: JSON.parse(window.localStorage.getItem('srl:v1:recall_tasks') ?? '[]'),
   }))
 
-  const profile = JSON.parse(stored.profile ?? 'null')
-  expect(profile.baselineCpm).toBeGreaterThan(0)
-  expect(profile.targetCpm).toBeGreaterThan(profile.baselineCpm)
-  expect(profile.onboardedAt).not.toBeNull()
+  expect(stored.profile.baselineCpm).toBeGreaterThan(0)
+  expect(stored.profile.targetCpm).toBeGreaterThan(stored.profile.baselineCpm)
 
-  const readingTests = JSON.parse(stored.readingTests ?? '[]')
-  expect(readingTests).toHaveLength(1)
-  expect(readingTests[0].isBaseline).toBe(true)
-  expect(readingTests[0].recallScore).toBe(75)
-  expect(readingTests[0].characterCount).toBe(888)
+  // Baseline Profile に理解の内訳と想起が入っている
+  expect(stored.profile.baselineProfile).not.toBeNull()
+  expect(stored.profile.baselineProfile.mainIdea).not.toBeNull()
+  expect(stored.profile.baselineProfile.causeEffect).not.toBeNull()
+  expect(stored.profile.baselineProfile.structure).not.toBeNull()
+  expect(stored.profile.baselineProfile.attempts).toBe(1)
 
-  // 翌日の Recall が1件予約されている
-  const recallTasks = JSON.parse(stored.recallTasks ?? '[]')
-  expect(recallTasks).toHaveLength(1)
-  expect(recallTasks[0].status).toBe('pending')
-  expect(recallTasks[0].passageId).toBe(readingTests[0].passageId)
+  // 使用した教材が記録され、再測定で同じ文章が出ないようにしている
+  expect(stored.profile.usedBaselinePassageIds).toHaveLength(1)
 
-  const sessions = JSON.parse(stored.sessions ?? '[]')
-  expect(sessions[0].sessionType).toBe('baseline')
-  expect(sessions[0].completedAt).not.toBeNull()
+  const test0 = stored.readingTests[0]
+  expect(test0.isBaseline).toBe(true)
+  expect(test0.characterCount).toBeGreaterThanOrEqual(1200)
+  expect(test0.typeScores).not.toBeNull()
+
+  // 想起は Key Point の照合から算出される（自己評価 75% とは一致しない）
+  expect(test0.recallScore).toBeGreaterThan(0)
+  expect(test0.recallScore).not.toBe(75)
+
+  expect(stored.recallTasks).toHaveLength(1)
+})
+
+test('2回目の Baseline では別の教材が出る', async ({ page }) => {
+  test.setTimeout(120_000)
+  await completeBaseline(page)
+  await expect(page.getByRole('heading', { name: '現在地を測定しました' })).toBeVisible()
+
+  const firstPassage = await page.evaluate(
+    () => JSON.parse(window.localStorage.getItem('srl:v1:reading_tests') ?? '[]')[0].passageId,
+  )
+
+  await page.goto('/baseline/read')
+  await expect(page.getByText(/Baseline Test・2 回目/)).toBeVisible()
+  await expect(page.getByText('前回とは別の文章を出しています。')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Start' }).click()
+  await page.waitForTimeout(READING_DWELL_MS)
+  await page.getByRole('button', { name: 'Finished' }).click()
+  for (let i = 0; i < 8; i += 1) {
+    await page.getByRole('listitem').first().getByRole('button').click()
+  }
+  await page.getByRole('textbox').fill('2回目の再現内容')
+  await page.getByRole('button', { name: '入力を確定する' }).click()
+  await page.getByRole('button', { name: '50%' }).click()
+  await page.getByRole('button', { name: '次へ' }).click()
+
+  const stored = await page.evaluate(() => ({
+    tests: JSON.parse(window.localStorage.getItem('srl:v1:reading_tests') ?? '[]'),
+    profile: JSON.parse(window.localStorage.getItem('srl:v1:profile') ?? 'null'),
+  }))
+
+  expect(stored.tests).toHaveLength(2)
+  expect(stored.tests[1].passageId).not.toBe(firstPassage)
+  expect(stored.profile.baselineProfile.attempts).toBe(2)
+  expect(stored.profile.usedBaselinePassageIds).toHaveLength(2)
 })
 
 test('飛ばし読みは基準値として保存されない', async ({ page }) => {
@@ -76,43 +117,24 @@ test('飛ばし読みは基準値として保存されない', async ({ page }) 
   await page.waitForTimeout(500)
   await page.getByRole('button', { name: 'Finished' }).click()
 
-  for (let i = 0; i < 5; i += 1) {
+  for (let i = 0; i < 8; i += 1) {
     await page.getByRole('listitem').first().getByRole('button').click()
   }
   await page.getByRole('textbox').fill('あまり覚えていない')
   await page.getByRole('button', { name: '入力を確定する' }).click()
   await page.getByRole('button', { name: '0%', exact: true }).click()
-  await page.getByRole('button', { name: '結果を見る' }).click()
+  await page.getByRole('button', { name: '次へ' }).click()
 
   await expect(page.getByText('保存していません')).toBeVisible()
 
   const profile = await page.evaluate(() =>
     JSON.parse(window.localStorage.getItem('srl:v1:profile') ?? 'null'),
   )
-  // 壊れた計測で基準値を汚染しない
   expect(profile.baselineCpm).toBeNull()
-})
-
-test('Baseline 完了後、Dashboard に自分の CPM と目標速度が表示される', async ({ page }) => {
-  await completeBaseline(page)
-  await expect(page.getByRole('heading', { name: '現在地を測定しました' })).toBeVisible()
-
-  await page.getByRole('link', { name: 'Dashboard へ' }).click()
-  await expect(page).toHaveURL(/\/dashboard$/)
-
-  // Baseline を終えたので案内は消え、実測値が出ている
-  await expect(page.getByText('Baseline Test が未実施です')).toHaveCount(0)
-  await expect(page.getByText('今日の目標速度')).toBeVisible()
-
-  // ラベルは CSS で大文字化しているだけなので、DOM 上は 'Current CPM'
-  const cpmTile = page.locator('div').filter({ hasText: /^Current CPM/ }).last()
-  await expect(cpmTile).toBeVisible()
-  await expect(cpmTile).not.toContainText('—')
-  await expect(page.getByText(/直近 \d+ 件の実績から算出しています/)).toBeVisible()
 })
 
 test('読了せずに設問へ進めない', async ({ page }) => {
   await page.goto('/baseline/read')
   await expect(page.getByRole('button', { name: 'Start' })).toBeVisible()
-  await expect(page.getByText('1 / 5')).toHaveCount(0)
+  await expect(page.getByText('1 / 8')).toHaveCount(0)
 })

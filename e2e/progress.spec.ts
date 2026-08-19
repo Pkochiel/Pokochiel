@@ -93,7 +93,7 @@ test('実績があれば推移とレーダーが表示され、数値でも確�
   await page.goto('/progress')
 
   await expect(page.getByRole('img', { name: /の推移$/ }).first()).toBeVisible()
-  await expect(page.getByRole('img', { name: '6軸の能力バランス' })).toBeVisible()
+  await expect(page.getByRole('img', { name: '9つのスキルのバランス' })).toBeVisible()
 
   // 色に頼らない代替経路（表）が存在する
   await page.getByText('数値で見る').first().click()

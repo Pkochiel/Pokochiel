@@ -50,26 +50,49 @@ Dashboard の主役は Today's Training の単一 CTA であり、メニュー�
 
 ## 6. 主要指標（ユーザーに見せる数値）
 
+**主要指標は Skill Profile（9つの認知能力）である。**
+CPM・ERS のような単一の数値を総合指標として扱わない。
+各指標の定義と目的は [METRICS.md](METRICS.md) に集約している。
+
+
 | 指標 | 定義 | 目的 |
 |---|---|---|
 | CPM | 本文文字数 ÷ 読書秒数 × 60 | 読書速度 |
 | Comprehension | 理解度テスト正答率 0–100 | 理解 |
 | Immediate Recall | 直後の白紙想起 0–100 | 即時想起 |
 | Next-day Recall | 翌日の想起 0–100 | 長期記憶 |
-| ERS (Effective Reading Score) | CPM × comprehension(0–1) × recall(0–1) | 速度・理解・記憶の複合 |
+| ERS (Effective Reading Score) | CPM × comprehension(0–1) × recall(0–1) | 速度・理解・記憶をまとめた**参考値** |
 | Training Streak | 連続実施日数 | 継続 |
 
-**ERS は実験的な内部指標であり、絶対的な能力指数として扱わない。**
-UI では「速さだけではなく、理解・記憶を含めた読書性能」と説明し、常に内訳（CPM / 理解 / 想起）と併記する。
+**ERS は参考値であり、総合能力指標として扱わない。**
+この式は CPM に対して線形で上限がないため、極端な読書速度がスコアを支配する
+（ユニットテストで固定済み。詳細は [METRICS.md](METRICS.md) §5）。
+UI では常に「参考値」と明記し、内訳（CPM / 理解 / 想起）と併記する。
+総合的な現在地を示すのは Skill Profile である。
 
-## 7. Skill Radar（能力の可視化軸）
+## 7. Skill Profile（主要指標）
+
+鍛える認知能力を9つに分け、**独立に**評価する。
 
 ```
-Reading Speed / Chunking / Structure / Comprehension / Recall / Adaptive Reading
+Reading Speed / Chunk Recognition / Meaning Extraction / Structure Recognition /
+Prediction / Adaptive Reading / Comprehension / Immediate Recall / Delayed Recall
 ```
 
-MVP ではレーダーチャート描画自体は後回しでよいが、**6軸のスコアは MVP 時点から算出・保存する**。
-（後からチャートを足すだけで済むよう、データ側を先に用意する。）
+各スキルは4つの状態を持つ。
+
+```
+unmeasured  まだ測っていない
+weak        測ったうえで弱い
+normal      標準
+strong      強い
+```
+
+**`unmeasured` と `weak` を区別する。** 未測定を 0 点として扱うと、
+新規ユーザーは「全部が弱点」と判定され、実際には測っていない能力に時間を割くことになる。
+
+Skill Profile は表示のためだけの数値ではなく、
+**Daily Training の構成を決めるドメインモデル**である（[TRAINING_LOGIC.md](TRAINING_LOGIC.md) §5）。
 
 ## 8. Gamification 方針
 
@@ -81,10 +104,16 @@ MVP ではレーダーチャート描画自体は後回しでよいが、**6軸�
 
 ## 9. MVP スコープ
 
-**必須**
+**必須（Phase 1 完了済み）**
 
 Baseline Test / Dashboard / Daily Training / Speed Push / Chunk Reading / Structure Reading /
 Comprehension Test / Immediate Recall / Progress Tracking / Local Seed Content
+
+**Phase 1.5 で追加（完了済み）**
+
+Meaning Flash / Prediction Reading / Variable Speed Reading / Regression Control /
+Skill Profile（9スキル）/ Key Point 照合による Recall 評価 / 複数教材の Baseline /
+ルールベースのフィードバック
 
 **MVP では実装しない**
 
