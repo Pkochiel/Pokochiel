@@ -1,4 +1,5 @@
-import { CORE_TRAINING_SKILLS, OPTIONAL_TRAINING_SKILLS, SKILL } from '../config/training-config'
+import { OPTIONAL_TRAINING_SKILLS, SKILL } from '../config/training-config'
+import type { CORE_TRAINING_SKILLS } from '../config/training-config'
 import { hashString } from '../util/seeded-shuffle'
 import type { SkillId, SkillProfile, SkillState } from '../types/skill'
 import type { TrainingType } from '../types/training'
