@@ -6,11 +6,21 @@
  *  - ハッシュ付きの静的アセットはキャッシュ優先（同じ URL なら中身は変わらない）
  *  - 学習記録には触らない。データの永続化は IndexedDB 側の責務。
  *
- * VERSION を上げると古いキャッシュを破棄する。
+ * 更新戦略:
+ *  登録 URL の ?build= でキャッシュ名を分ける（/sw.js?build=<BUILD_ID>）。
+ *  新しいビルドを配ると登録スクリプトの URL が変わるため install → activate が走り、
+ *  activate で **このビルド以外の srl- キャッシュをすべて削除する**。
+ *  古い JS / CSS が無期限に residue として残ることはない。
+ *
+ *  HTML と JS の不整合は次の 2 点で防ぐ:
+ *   1. HTML はネットワーク優先（オンラインなら常に最新の HTML を見る）
+ *   2. HTML をキャッシュに入れるとき、その HTML が参照する JS / CSS も併せて取り込む
+ *  ファイル名にはハッシュが入るため、新しい HTML が古いチャンクを指すことはない。
  */
-const VERSION = 'v1'
-const SHELL_CACHE = `srl-shell-${VERSION}`
-const ASSET_CACHE = `srl-asset-${VERSION}`
+const BUILD = new URL(self.location.href).searchParams.get('build') || 'dev'
+const CACHE_PREFIX = 'srl-'
+const SHELL_CACHE = `${CACHE_PREFIX}shell-${BUILD}`
+const ASSET_CACHE = `${CACHE_PREFIX}asset-${BUILD}`
 const CURRENT_CACHES = [SHELL_CACHE, ASSET_CACHE]
 
 const TRAINING_TYPES = [
@@ -51,27 +61,37 @@ function findAssets(html) {
   return new Set(html.match(/\/_next\/static\/[^"'\\\s)]+/g) ?? [])
 }
 
+/** 未取得のアセットだけを取り込む。 */
+async function cacheAssets(urls) {
+  if (urls.size === 0) return
+  const cache = await caches.open(ASSET_CACHE)
+  await Promise.allSettled(
+    [...urls].map(async (url) => {
+      if (await cache.match(url)) return
+      await cache.add(url)
+    }),
+  )
+}
+
+/** HTML と、その HTML が参照する JS / CSS を対にして保存する。 */
+async function storeShell(request, response) {
+  const shell = await caches.open(SHELL_CACHE)
+  await shell.put(request, response.clone())
+  await cacheAssets(findAssets(await response.text()))
+}
+
 /**
- * 画面の HTML と、そこから参照される JS / CSS をまとめて取り込む。
- *
- * HTML だけを持っていてもチャンクが無ければオフラインでは動かない。
- * ファイル名にはハッシュが入るため、名前は HTML から実際に読み取る。
+ * 主要画面をまとめて取り込む。
+ * HTML だけではオフラインで画面が動かないため、参照先も一緒に入れる。
  */
 async function precache() {
-  const shell = await caches.open(SHELL_CACHE)
-  const assets = await caches.open(ASSET_CACHE)
-  const referenced = new Set()
-
   await Promise.allSettled(
     SHELL_ROUTES.map(async (route) => {
       const response = await fetch(route, { cache: 'reload' })
       if (!isCacheable(response)) return
-      await shell.put(route, response.clone())
-      for (const asset of findAssets(await response.text())) referenced.add(asset)
+      await storeShell(route, response)
     }),
   )
-
-  await Promise.allSettled([...referenced].map((url) => assets.add(url)))
 }
 
 self.addEventListener('install', (event) => {
@@ -89,7 +109,9 @@ self.addEventListener('activate', (event) => {
     (async () => {
       const names = await caches.keys()
       await Promise.all(
-        names.filter((name) => !CURRENT_CACHES.includes(name)).map((name) => caches.delete(name)),
+        names
+          .filter((name) => name.startsWith(CACHE_PREFIX) && !CURRENT_CACHES.includes(name))
+          .map((name) => caches.delete(name)),
       )
       await self.clients.claim()
     })(),
@@ -97,11 +119,14 @@ self.addEventListener('activate', (event) => {
 })
 
 /** 画面遷移: ネットワーク優先。落ちたらキャッシュ、最後は Dashboard を出す。 */
-async function handleNavigation(request) {
+async function handleNavigation(event, request) {
   const cache = await caches.open(SHELL_CACHE)
   try {
     const response = await fetch(request)
-    if (isCacheable(response)) cache.put(request, response.clone())
+    if (isCacheable(response)) {
+      // 応答を返したあとで、HTML と参照先アセットを対にして保存する
+      event.waitUntil(storeShell(request, response.clone()))
+    }
     return response
   } catch (error) {
     const cached = await cache.match(request)
@@ -143,7 +168,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return
 
   if (request.mode === 'navigate') {
-    event.respondWith(handleNavigation(request))
+    event.respondWith(handleNavigation(event, request))
     return
   }
   if (url.pathname.startsWith('/_next/static/')) {

@@ -364,7 +364,7 @@ create policy "read questions of readable passages" on public.training_questions
 
 ### 6-1. IndexedDB（既定の保存先）
 
-データベース名 `speed-reading-lab` / version 1。object store は collection と 1 対 1、
+データベース名 `speed-reading-lab` / **version 1**。object store は collection と 1 対 1、
 `keyPath` は `id`。索引は作らず、全件取得して呼び出し側で絞る（個人の学習記録の規模で足りる）。
 
 | object store | 内容 | 件数の目安 |
@@ -379,6 +379,20 @@ create policy "read questions of readable passages" on public.training_questions
 読み出しは `TrainingRepository` が zod で検証し、スキーマに合わない行は捨てる。
 **返す順序は `createdAt` 昇順**に揃える（IndexedDB は id 順で返すため。
 trend 判定・直近 N 件・最新 Baseline が並び順に意味を持たせている）。
+
+#### スキーマの version と migration
+
+| version | 内容 |
+|---|---|
+| 1 | collection ごとの object store を作る（`keyPath: id`） |
+
+- スキーマ変更は `SCHEMA_MIGRATIONS` への**追記のみ**で行い、
+  端末に保存されている version から順に適用する。
+- **DB を削除して作り直す方式は通常経路では使わない。**
+  既存の Training History / Baseline / Recall / Settings はそのまま引き継ぐ。
+- migration が失敗した場合は versionchange トランザクションを中断し、
+  DB を旧 version のまま残す（記録を壊さない）。
+- 手順と設計の詳細は [PERSISTENCE.md](PERSISTENCE.md) §3。
 
 ### 6-2. localStorage（Phase 1 の形式・現在は代替保存先）
 
@@ -421,12 +435,15 @@ srl:v1:plans          DailyTrainingPlan[]
 
 Settings から書き出せる JSON。端末外へ記録を持ち出す唯一の経路。
 
+### 現行（schemaVersion 2）
+
 ```jsonc
 {
   "format": "speed-reading-lab.backup",
-  "version": 1,
-  "exportedAt": "2026-08-19T09:00:00.000Z",
-  "collections": {
+  "schemaVersion": 2,
+  "exportedAt": "2026-08-20T09:00:00.000Z",
+  "appVersion": "0.1.0",
+  "data": {
     "profile": [ /* Profile */ ],
     "sessions": [ /* TrainingSession[] */ ],
     "results": [ /* TrainingResult[] */ ],
@@ -437,8 +454,26 @@ Settings から書き出せる JSON。端末外へ記録を持ち出す唯一の
 }
 ```
 
+### version の履歴
+
+| schemaVersion | 形 | 取り込み |
+|---|---|---|
+| 1 | `{ format, version, exportedAt, collections }` | `BACKUP_MIGRATIONS` で 2 へ変換して取り込む |
+| 2 | 上記（`schemaVersion` / `data` / `appVersion`） | 現行 |
+
+### 取り込みの流れ
+
+```
+ファイル → version 判定 → migration → 封筒の zod 検証 → 行ごとの zod 検証 → 保存
+```
+
 - ファイル名は `speed-reading-lab-backup-YYYY-MM-DD.json`。
-- 復元は**置き換え**。取り込む前に全行を zod で検証し、通らなかった行は件数だけ報告して除外する。
-- `format` / `version` が一致しないファイルは受け付けず、既存データにも触らない。
+- 復元は**置き換え**。全行の検証を通してから置き換えるため、「半分だけ復元」にはならない。
+  通らなかった行は件数だけ報告して除外する。
+- 拒否の理由は 3 つに分ける。
+  `format`（当アプリのファイルでない）/ `version`（現行より新しい）/ `corrupt`（中身が読めない）。
+- **拒否したときは既存データに触らない。** 特に `collections` が欠けた v1 ファイルを
+  「空のバックアップ」とみなして全消去する事故を起こさないよう、欠損は既定値で埋めない。
 - 保存先の構造（object store 等）ではなく collection 単位の素の JSON なので、
   将来保存先が変わっても読み込める。
+- 旧 version のファイルを読めることは永続的な責務。詳細は [PERSISTENCE.md](PERSISTENCE.md) §5。

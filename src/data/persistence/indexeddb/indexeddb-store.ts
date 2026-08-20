@@ -5,13 +5,22 @@ import {
   type StoredRecord,
 } from '../record-store'
 import { openDatabase, readFromStore, writeToStore } from './idb'
+import {
+  DATABASE_VERSION,
+  repairMissingCollections,
+  runMigrations,
+  SCHEMA_MIGRATIONS,
+  type SchemaMigration,
+} from './migrations'
 
 export const DATABASE_NAME = 'speed-reading-lab'
-export const DATABASE_VERSION = 1
+export { DATABASE_VERSION }
 
 export interface IndexedDbRecordStoreDeps {
   factory: IDBFactory
   databaseName?: string
+  /** スキーマの並び。テストで別の並びを注入するためだけに差し替える。 */
+  migrations?: readonly SchemaMigration[]
 }
 
 /**
@@ -35,30 +44,33 @@ export class IndexedDbRecordStore implements RecordStore {
     return this.connection
   }
 
-  private createMissingStores(database: IDBDatabase): void {
-    for (const collection of COLLECTIONS) {
-      if (!database.objectStoreNames.contains(collection)) {
-        database.createObjectStore(collection, { keyPath: 'id' })
-      }
-    }
+  private get migrations(): readonly SchemaMigration[] {
+    return this.deps.migrations ?? SCHEMA_MIGRATIONS
+  }
+
+  private get targetVersion(): number {
+    return this.migrations.reduce((latest, migration) => Math.max(latest, migration.version), 1)
   }
 
   /**
-   * 必要な object store が揃った接続を返す。
+   * 現在のスキーマまで migration を適用した接続を返す。
    *
-   * 同じ version で store の無い DB が既にあると upgrade が二度と走らず、
-   * 保存できないまま無言で失敗し続ける。その場合は version を上げて作り直す
-   * （既存レコードは消さない）。
+   * 通常経路は version migration（保存済みデータはそのまま引き継ぐ）。
+   * 想定外の DB —— 当アプリの migration を通っていない、object store が
+   * 足りない状態 —— に当たったときだけ、version を上げて不足分を補う。
+   * こちらは fallback であり、データの削除は行わない。
    */
   private async connect(): Promise<IDBDatabase> {
     const name = this.deps.databaseName ?? DATABASE_NAME
-    const upgrade = (database: IDBDatabase) => this.createMissingStores(database)
+    const migrations = this.migrations
 
     const database = await openDatabase({
       factory: this.deps.factory,
       name,
-      version: DATABASE_VERSION,
-      upgrade,
+      version: this.targetVersion,
+      upgrade: (context) => {
+        runMigrations(context, migrations, context.oldVersion, context.newVersion)
+      },
     })
     if (COLLECTIONS.every((collection) => database.objectStoreNames.contains(collection))) {
       return database
@@ -66,7 +78,12 @@ export class IndexedDbRecordStore implements RecordStore {
 
     const nextVersion = database.version + 1
     database.close()
-    return openDatabase({ factory: this.deps.factory, name, version: nextVersion, upgrade })
+    return openDatabase({
+      factory: this.deps.factory,
+      name,
+      version: nextVersion,
+      upgrade: (context) => repairMissingCollections(context),
+    })
   }
 
   /** 接続を閉じる（テストと、別タブからの upgrade 時に使う）。 */

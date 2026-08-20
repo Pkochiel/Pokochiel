@@ -3,7 +3,12 @@
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
-import { backupFileName, getBackupService, type ImportReport } from '@/data/backup'
+import {
+  backupFileName,
+  getBackupService,
+  type ImportRejection,
+  type ImportReport,
+} from '@/data/backup'
 
 type Status =
   | { kind: 'idle' }
@@ -12,9 +17,10 @@ type Status =
   | { kind: 'restored'; report: ImportReport }
   | { kind: 'error'; message: string }
 
-const INVALID_MESSAGES: Record<'format' | 'version', string> = {
+const INVALID_MESSAGES: Record<ImportRejection, string> = {
   format: 'このファイルは Speed Reading Lab のバックアップではありません。',
-  version: 'このバックアップは対応していない形式です。',
+  version: 'このバックアップは、より新しいバージョンのアプリで書き出されたものです。',
+  corrupt: 'このバックアップは内容を読み取れませんでした。',
 }
 
 /** 生成した Blob を保存させる。DOM 操作はこの層に閉じる。 */
@@ -44,7 +50,7 @@ export function BackupPanel() {
     setStatus({ kind: 'working' })
     try {
       const snapshot = await getBackupService().createSnapshot()
-      const count = Object.values(snapshot.collections).reduce((sum, rows) => sum + rows.length, 0)
+      const count = Object.values(snapshot.data).reduce((sum, rows) => sum + rows.length, 0)
       downloadJson(backupFileName(snapshot.exportedAt), JSON.stringify(snapshot, null, 2))
       setStatus({ kind: 'exported', count })
     } catch {

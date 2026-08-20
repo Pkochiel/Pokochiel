@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "e2e:smoke": "playwright test e2e/smoke.spec.ts e2e/offline.spec.ts e2e/progress.spec.ts",
+    "e2e:smoke": "playwright test e2e/smoke.spec.ts e2e/offline.spec.ts e2e/pwa-update.spec.ts e2e/progress.spec.ts",
     "e2e:full": "playwright test",
     "check": "npm run typecheck && npm run lint && npm run test"
   },

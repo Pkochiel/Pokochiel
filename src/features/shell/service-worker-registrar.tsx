@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { BUILD_ID } from '@/lib/app-version'
 
 /**
  * Service Worker を登録する。
@@ -14,10 +15,14 @@ export function ServiceWorkerRegistrar() {
     if (process.env.NODE_ENV !== 'production') return
     if (!('serviceWorker' in navigator)) return
 
+    // ビルドごとに URL を変える。新しいビルドを配ると install → activate が走り、
+    // 旧ビルドのキャッシュ（古い JS / CSS）が activate で破棄される。
     const register = () => {
-      void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
-        // 登録できなくてもアプリは動く（オンライン時と同じ挙動になるだけ）。
-      })
+      void navigator.serviceWorker
+        .register(`/sw.js?build=${encodeURIComponent(BUILD_ID)}`, { scope: '/' })
+        .catch(() => {
+          // 登録できなくてもアプリは動く（オンライン時と同じ挙動になるだけ）。
+        })
     }
 
     if (document.readyState === 'complete') {

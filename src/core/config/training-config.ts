@@ -8,10 +8,17 @@ import type { SkillId } from '../types/skill'
 import type { TrainingType } from '../types/training'
 
 export const READING = {
-  /** これ未満の計測は invalid とする（誤タップ・スキップ対策） */
+  /** これ未満の計測は invalid とする（誤タップ・スキップ対策）。文字数によらない絶対下限。 */
   minReadingSeconds: 3,
-  /** これを超える CPM は invalid とする */
-  maxPlausibleCpm: 6000,
+  /**
+   * これを超える CPM は invalid とする。
+   *
+   * 日本語の黙読は一般に 400〜600 字/分、訓練者でも 1,000〜1,500 字/分。
+   * 3,000 字/分はその倍以上であり、「読んで理解した」と言える範囲の外側にある。
+   * 実効的にはこの上限が**文字数に比例した最短有効時間**として働く
+   * （1,200 字なら 24 秒）。詳細は docs/METRICS.md を参照。
+   */
+  maxPlausibleCpm: 3000,
   /** Baseline に対する初期目標速度の倍率 */
   baselineStartMultiplier: 1.15,
 } as const

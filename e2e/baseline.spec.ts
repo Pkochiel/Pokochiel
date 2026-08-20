@@ -21,11 +21,11 @@ interface StoredReadingTest {
 }
 
 /**
- * Baseline 教材は 1,100〜1,300 字。CPM が現実的な範囲（maxPlausibleCpm = 6000）に
- * 収まるには 12 秒以上必要なので、余裕をみて滞在する。
+ * Baseline 教材は 1,200〜1,260 字。CPM が現実的な範囲（maxPlausibleCpm = 3000）に
+ * 収まるには 25 秒以上必要なので、余裕をみて滞在する。
  * フローの検証が目的だが、計測の妥当性判定は迂回しない。
  */
-const READING_DWELL_MS = 15_000
+const READING_DWELL_MS = 28_000
 
 async function completeBaseline(page: Page, options: { dwellMs?: number } = {}) {
   await page.goto('/baseline/read')

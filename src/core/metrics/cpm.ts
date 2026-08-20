@@ -38,6 +38,17 @@ export function calculateCpm({ characterCount, elapsedSeconds }: CpmInput): CpmR
   return { cpm, valid: true, invalidReason: null }
 }
 
+/**
+ * その分量を「読んだ」と言える最短時間。
+ *
+ * 絶対下限（minReadingSeconds）と、速度上限から決まる下限のうち大きい方。
+ * 文字数が増えれば下限も伸びるため、教材の長さを変えても方針は変わらない。
+ */
+export function minimumValidSeconds(characterCount: number): number {
+  if (characterCount <= 0) return READING.minReadingSeconds
+  return Math.max(READING.minReadingSeconds, (characterCount * 60) / READING.maxPlausibleCpm)
+}
+
 /** 表示用に丸めた CPM。内部計算では丸めない。 */
 export function formatCpm(cpm: number): number {
   return Math.round(cpm)

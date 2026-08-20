@@ -159,16 +159,31 @@ export async function waitForProfile<T = Row>(
   }
 }
 
-/** Service Worker が起動してページを制御する（＝オフラインで配信できる）まで待つ。 */
-export async function waitForServiceWorker(page: Page): Promise<void> {
-  const controlled = await page.evaluate(async () => {
+/**
+ * Service Worker が起動して、activate の後始末まで終わるのを待つ。
+ *
+ * controller の切り替わりは activate の開始時点で起きるため、それだけを待つと
+ * precache や旧キャッシュの削除が終わる前にアサートしてしまう。
+ * active.state が 'activated' になるのは activate の waitUntil が解決した後。
+ */
+export async function waitForServiceWorker(page: Page, build?: string): Promise<void> {
+  const activated = await page.evaluate(async (expectedBuild: string | null) => {
     if (!('serviceWorker' in navigator)) return false
     await navigator.serviceWorker.ready
+
+    const matches = (worker: ServiceWorker | null | undefined) =>
+      Boolean(worker) && (!expectedBuild || worker!.scriptURL.includes(`build=${expectedBuild}`))
+
     const deadline = Date.now() + 20_000
-    while (!navigator.serviceWorker.controller && Date.now() < deadline) {
+    while (Date.now() < deadline) {
+      const registration = await navigator.serviceWorker.getRegistration()
+      const active = registration?.active
+      if (active?.state === 'activated' && matches(active) && matches(navigator.serviceWorker.controller)) {
+        return true
+      }
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    return Boolean(navigator.serviceWorker.controller)
-  })
-  if (!controlled) throw new Error('Service Worker がページを制御しませんでした')
+    return false
+  }, build ?? null)
+  if (!activated) throw new Error('Service Worker が有効になりませんでした')
 }

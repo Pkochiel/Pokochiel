@@ -22,17 +22,46 @@ export function transactionDone(transaction: IDBTransaction): Promise<void> {
   })
 }
 
+/** onupgradeneeded に渡す情報。migration はここから必要なものだけ受け取る。 */
+export interface UpgradeContext {
+  database: IDBDatabase
+  /** versionchange トランザクション。既存データの書き換えに使う。 */
+  transaction: IDBTransaction
+  /** その端末に保存されていた version（新規作成なら 0）。 */
+  oldVersion: number
+  newVersion: number
+}
+
 export interface OpenDatabaseOptions {
   factory: IDBFactory
   name: string
   version: number
-  upgrade: (database: IDBDatabase) => void
+  upgrade: (context: UpgradeContext) => void
 }
 
 export function openDatabase(options: OpenDatabaseOptions): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = options.factory.open(options.name, options.version)
-    request.onupgradeneeded = () => options.upgrade(request.result)
+    request.onupgradeneeded = (event) => {
+      const transaction = request.transaction
+      if (!transaction) {
+        reject(new Error('versionchange transaction is missing'))
+        return
+      }
+      try {
+        options.upgrade({
+          database: request.result,
+          transaction,
+          oldVersion: event.oldVersion,
+          newVersion: event.newVersion ?? options.version,
+        })
+      } catch (error) {
+        // migration が失敗したら versionchange を明示的に中断する。
+        // DB は元の version のまま残り、保存済みの記録は失われない。
+        transaction.abort()
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+    }
     request.onerror = () => reject(request.error ?? new Error('IndexedDB open failed'))
     request.onsuccess = () => {
       const database = request.result

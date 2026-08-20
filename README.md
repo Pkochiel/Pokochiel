@@ -9,7 +9,8 @@
 
 ## ステータス
 
-**Phase 1（MVP）/ Phase 1.5（Training Core Enhancement）/ Phase 2（Local First）完了。**
+**Phase 1（MVP）/ Phase 1.5（Training Core Enhancement）/ Phase 2（Local First）/
+Phase 2.5（Release Hardening）完了。**
 
 Baseline Test → Daily Training → 翌日 Recall → Progress まで一連で完了でき、
 9つの認知能力（Skill Profile）を独立に測定して、その日の構成を自動で決める。
@@ -48,7 +49,8 @@ Baseline Test → Daily Training → 翌日 Recall → Progress まで一連で�
 npm install
 npm run dev      # 開発サーバ（Service Worker は登録しない）
 npm run check    # typecheck + lint + unit test
-npm run e2e      # Playwright（build & start を含む）
+npm run e2e:smoke # Playwright（PR で回すぶん・30秒程度）
+npm run e2e:full  # Playwright（統合時に回すぶん・5分程度）
 
 node scripts/generate-icons.mjs   # PWA アイコンを作り直す
 ```
@@ -60,6 +62,8 @@ node scripts/generate-icons.mjs   # PWA アイコンを作り直す
 | [docs/PRODUCT.md](docs/PRODUCT.md) | コンセプト・非目標・指標・MVP スコープ・DoD |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 技術スタック・レイヤリング・永続化（Local First）・PWA |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | ドメイン型・IndexedDB / localStorage スキーマ・移送・Backup 形式 |
+| [docs/PERSISTENCE.md](docs/PERSISTENCE.md) | Repository / RecordStore / migration / backup / 将来の Sync Engine |
+| [docs/RELEASE.md](docs/RELEASE.md) | CI・build・test・PWA キャッシュ更新・スキーマ変更の手順 |
 | [docs/TRAINING_LOGIC.md](docs/TRAINING_LOGIC.md) | CPM / ERS / 速度適応 / プラン生成 / Recall スケジューリング / チャンク分割 |
 | [docs/METRICS.md](docs/METRICS.md) | CPM / Comprehension / Recall / Skill Profile / ERS / 有効・無効判定の定義 |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Step 1–15 の実装順と各 Step の完了条件 |

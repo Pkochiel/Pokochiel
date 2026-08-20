@@ -119,11 +119,17 @@ data/       教材コンテンツ／永続化（Repository 実装）— core の
 │  │  │  ├─ memory-store.ts          #   メモリ（SSR / テスト）
 │  │  │  ├─ local-storage-store.ts   #   localStorage（移送元 / 代替保存先）
 │  │  │  ├─ indexeddb/               #   IndexedDB（ここだけが IDB を知る）
+│  │  │  │  ├─ idb.ts                #     Promise 化した薄いラッパー
+│  │  │  │  ├─ migrations.ts         #     version ごとのスキーマ migration
+│  │  │  │  └─ indexeddb-store.ts    #     RecordStore の実装
 │  │  │  ├─ legacy-migration.ts      #   Phase 1 データの移送
 │  │  │  └─ create-store.ts          #   保存先を決める唯一の場所
 │  │  └─ backup/                     # JSON Export / Import
+│  │     ├─ migrations.ts            #   旧 backup を現行形式へ
+│  │     └─ snapshot.ts              #   検証つきの取り込み・書き出し
 │  ├─ components/ui/                 # 汎用 primitives
-│  └─ lib/                           # cn / format / date / supabase clients
+│  └─ lib/                           # cn / format / date / app-version
+├─ .github/workflows/ci.yml          # typecheck / lint / unit / build / E2E
 ├─ e2e/                              # Playwright（helpers/storage.ts で保存内容を検証）
 ├─ public/
 │  ├─ sw.js                          # Service Worker（オフライン起動）
@@ -138,6 +144,9 @@ data/       教材コンテンツ／永続化（Repository 実装）— core の
 
 Phase 2 の要件は「インターネット接続とアカウント登録なしで、Training / Progress / Recall が
 すべて使えること」。**クラウド同期が存在しない前提で全機能が完結する。**
+
+> スキーマ migration・backup の version 管理・耐久性テストを含む詳細は
+> **[docs/PERSISTENCE.md](PERSISTENCE.md)** にまとめている。ここでは層の関係だけを示す。
 
 ### 4-1. 層構成
 
@@ -262,9 +271,22 @@ Baseline）を取得し、**その HTML が参照している JS・CSS も HTML 
 HTML だけではオフラインで画面が動かないため。トレーニング画面は `generateStaticParams` で
 静的出力し、オフラインでも開けるようにしている。
 
+### 更新戦略
+
+Service Worker は `/sw.js?build=<BUILD_ID>` として登録する（`BUILD_ID` はビルド時に埋め込む）。
+
+- 新しいビルドを配ると登録 URL が変わり、install → activate が走る
+- activate で**このビルド以外の `srl-` キャッシュをすべて削除**する。
+  古い JS / CSS が residue として残らない
+- HTML と JS の不整合は、HTML をネットワーク優先にすること、および
+  HTML をキャッシュするときに参照先の JS / CSS も併せて取り込むことで防ぐ
+- トレーニング中に画面が飛ばないよう、更新検知による自動リロードは行わない
+
 Service Worker は本番ビルドでのみ登録する（開発中はキャッシュが変更の確認を妨げるため）。
 オフライン時は画面上部に「オフライン：トレーニング・記録・翌日の Recall はこのまま続けられます」と
 表示する。止まったのではなく、そのまま使えることを伝える。
+
+手順とチェックリストは [docs/RELEASE.md](RELEASE.md)。
 
 ## 9. テスト戦略
 
@@ -274,6 +296,10 @@ Service Worker は本番ビルドでのみ登録する（開発中はキャッ�
 | Component | Vitest + Testing Library | Pacer / ReadingSurface など時間依存の少ない UI |
 | E2E | Playwright | Baseline → Dashboard → Training → Result の完走、オフライン起動・保存・復元 |
 | 層の封じ込め | Vitest | `core/` の純粋性（`purity.test.ts`）と、保存技術が UI / Core / Repository に漏れていないこと（`persistence-encapsulation.test.ts`） |
+| 耐久性 | Vitest | アプリ更新・Backup 往復・migration 失敗・保存先の退避で学習データが失われないこと（`durability.test.ts`） |
+
+CI（`.github/workflows/ci.yml`）が PR ごとに typecheck / lint / unit / build と smoke E2E を、
+統合ブランチへの push で full E2E を回す。詳細は [docs/RELEASE.md](RELEASE.md)。
 
 E2E は時間依存を避けるため、`?e2e=1` 時にトレーニング時間短縮とペーサー高速化を許すテストフック（`core/config` の値を上書きするだけ）を用意する。プロダクション経路には影響させない。
 
@@ -298,12 +324,17 @@ E2E は時間依存を避けるため、`?e2e=1` 時にトレーニング時間�
 | 1 | ローカルで動くトレーニング MVP | localStorage のみ。Auth なし。教材は静的 import |
 | 1.5 | Training Core Enhancement | Skill Profile を導入し、Daily Training の構成を Skill Profile から決める |
 | 2 | Local First / Offline | `RecordStore` ポート + IndexedDB。PWA でオフライン起動。Backup / Restore。Auth と Supabase は入れない |
+| 2.5 | Release Hardening | CI・スキーマ migration・backup の version 管理・SW の更新戦略。データ構造を変えても既存の記録が壊れない土台 |
 | 3 | Supabase Sync（任意機能） | `SyncingRecordStore` を 1 枚挟む。同期が無くても全機能が動く状態は維持する |
 | 4 | AI コンテンツ生成 / Recall 評価 | `ContentProvider` と `RecallEvaluator` をインタフェース経由で差し替え |
 
 **Phase 2（完了）：** 保存先を IndexedDB に移し、PWA でオフライン起動できるようにした。
 Auth と Supabase は入れていない。クラウドが存在しない状態で全機能が完結することを要件とし、
 E2E（`e2e/offline.spec.ts`）でネットワークを切った状態の起動・保存・翌日 Recall を確認している。
+
+**Phase 2.5（完了）：** 変更を安全に配るための土台。GitHub Actions での自動検証、
+IndexedDB の version migration、backup の schemaVersion、ビルド単位の SW キャッシュ。
+新機能ではなく「今後の変更で既存ユーザーの記録と PWA を壊さない」ための整備。
 
 **同期を後から足すときの原則：** ローカルへの書き込みを先に確定させ、同期は後追いにする。
 同期が失敗してもトレーニングが止まらないことを、常に優先する。
