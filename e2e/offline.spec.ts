@@ -68,8 +68,20 @@ test('ネットワークを切っても起動して Dashboard が開ける', asy
   await page.reload()
 
   await expect(page.getByRole('heading', { name: DASHBOARD_HEADING })).toBeVisible()
-  await expect(page.getByText('オフライン')).toBeVisible()
   await context.setOffline(false)
+})
+
+test('オフラインでも続けられることを画面で伝える', async ({ page }) => {
+  // 表示の判断材料は navigator.onLine だが、この値がオフライン化で更新されるかは
+  // ブラウザの実装差がある。ここでは UI が読む値そのものを固定し、表示だけを見る
+  // （通信を止めたときの実際の動作は、このファイルの他のテストが確認している）。
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
+  })
+  await page.goto('/dashboard')
+
+  await expect(page.getByRole('status')).toContainText('オフライン')
+  await expect(page.getByRole('status')).toContainText('このまま続けられます')
 })
 
 test('オフラインのままトレーニング画面まで開ける', async ({ page, context }) => {

@@ -147,17 +147,25 @@ async function handleAsset(request) {
   return response
 }
 
-/** その他の同一オリジン GET: キャッシュを返しつつ裏で更新する。 */
+/**
+ * その他の同一オリジン GET: キャッシュがあれば即返し、無ければ取りに行く。
+ *
+ * 必ず Response を返すこと。respondWith に undefined を渡すと Service Worker 側の
+ * 例外になり、オフライン時のプリフェッチ失敗が余計なエラーを生む。
+ */
 async function handleOther(request) {
   const cache = await caches.open(ASSET_CACHE)
   const cached = await cache.match(request)
-  const network = fetch(request)
-    .then((response) => {
-      if (isCacheable(response)) cache.put(request, response.clone())
-      return response
-    })
-    .catch(() => cached)
-  return cached ?? network
+  if (cached) return cached
+
+  try {
+    const response = await fetch(request)
+    if (isCacheable(response)) cache.put(request, response.clone())
+    return response
+  } catch {
+    // 取得できないことをそのままネットワークエラーとして返す
+    return Response.error()
+  }
 }
 
 self.addEventListener('fetch', (event) => {
