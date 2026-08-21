@@ -6,6 +6,11 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
+      - main
+      - master
+      # 既定ブランチ。PR #3 をマージした場合はここから配信される
+      - claude/scrape-networking-tutorials-WlP1L
+      # 開発ブランチから直接配信する場合（github-pages 環境で許可が必要）
       - 'claude/speed-reading-lab-app-**'
   workflow_dispatch:
 
