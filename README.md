@@ -55,6 +55,16 @@ npm run e2e:full  # Playwright（統合時に回すぶん・5分程度）
 node scripts/generate-icons.mjs   # PWA アイコンを作り直す
 ```
 
+## 起動できないとき
+
+| 症状 | 原因と対処 |
+|---|---|
+| 画面は出るが「構成を準備しています…」から進まない | JS チャンクの取得に失敗している。DevTools の Network で `/_next/static/chunks/*.js` が 200 か確認する |
+| dev で `/_next/*` が 403 になる | dev サーバーは既定で localhost 以外からの要求を拒否する。`next.config.ts` の `allowedDevOrigins` に開きたいホスト（LAN の IP 等）を足す |
+| 一部のチャンクだけ 404 / 500 | サーバーを動かしたまま `npm run build` した。**サーバーを止めてからビルドし直す** |
+| `Port 3000 is in use` | 前のサーバーが残っている。ターミナルを閉じるか `npx next start -p 3210` で別ポートを使う |
+| `ERR_CONNECTION_REFUSED` | サーバーが起動していない。ターミナルに `✓ Ready` が出ているか確認する |
+
 ## ドキュメント
 
 | ドキュメント | 内容 |

@@ -15,7 +15,7 @@ export default function BaselinePage() {
       <ol className="mt-8 space-y-3 text-sm leading-relaxed text-fg-muted">
         <li>1. 未読の文章が表示されます。Start を押すと計測が始まります。</li>
         <li>2. 普段どおりの速さで読み、読み終えたら Finished を押してください。</li>
-        <li>3. 理解度テスト（5問）に回答します。</li>
+        <li>3. 理解度テスト（8問）に回答します。</li>
         <li>4. 本文を見ずに、内容を3〜5項目で書き出します。</li>
       </ol>
 
