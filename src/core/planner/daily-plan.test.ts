@@ -140,6 +140,53 @@ describe('generateDailyPlan: 時間配分', () => {
   })
 })
 
+describe('generateDailyPlan: 任意ブロックの数', () => {
+  const OPTIONAL: TrainingType[] = [
+    'meaning_flash',
+    'chunk_reading',
+    'prediction_reading',
+    'variable_speed',
+    'regression_control',
+  ]
+
+  const optionalBlocks = (minutes: PlanDuration, date = '2026-08-19') =>
+    generateDailyPlan(input({ totalMinutes: minutes, date: toLocalDate(date) })).blocks.filter((b) =>
+      OPTIONAL.includes(b.type),
+    )
+
+  it.each([10, 20, 30] as PlanDuration[])('%i 分では上限数を超えない', (minutes) => {
+    expect(optionalBlocks(minutes).length).toBeLessThanOrEqual(PLAN.optionalBlockCount[minutes])
+  })
+
+  it.each([10, 20, 30] as PlanDuration[])('%i 分でも任意ブロックが消えない', (minutes) => {
+    expect(optionalBlocks(minutes).length).toBeGreaterThan(0)
+  })
+
+  it('ブロック数を絞っても任意ブロックの合計時間は予算どおり', () => {
+    for (const minutes of [10, 20, 30] as PlanDuration[]) {
+      const total = optionalBlocks(minutes).reduce((sum, b) => sum + b.minutes, 0)
+      expect(total).toBe(PLAN.optionalBudget[minutes])
+    }
+  })
+
+  it('1日のブロック数が増えすぎない（設問ラウンドの上限）', () => {
+    // ブロックを刻むほど intro と設問が増え、訓練そのものの時間が痩せる。
+    for (const minutes of [10, 20, 30] as PlanDuration[]) {
+      const plan = generateDailyPlan(input({ totalMinutes: minutes }))
+      expect(plan.blocks.length).toBeLessThanOrEqual(8)
+    }
+  })
+
+  it('日を跨げば任意ブロックは一巡する', () => {
+    const seen = new Set<TrainingType>()
+    for (let day = 1; day <= 14; day += 1) {
+      const date = `2026-09-${String(day).padStart(2, '0')}`
+      for (const block of optionalBlocks(30, date)) seen.add(block.type)
+    }
+    expect([...seen].sort()).toEqual([...OPTIONAL].sort())
+  })
+})
+
 describe('generateDailyPlan: 決定性', () => {
   it('同じ入力からは常に同じ構成になる', () => {
     expect(generateDailyPlan(input())).toEqual(generateDailyPlan(input()))

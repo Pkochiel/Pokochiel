@@ -5,12 +5,11 @@ import { Button } from '@/components/ui/button'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { buildChunkGroups, chunkDisplayMs } from '@/core/chunking/segment'
 import { scoreComprehension } from '@/core/metrics/comprehension'
+import { readCheckQuestions } from '@/core/training/question-set'
 
 import { QuestionRunner } from '../shared/question-runner'
 import { usePrefersReducedMotion } from '../shared/use-reduced-motion'
 import type { TrainingBlockProps } from '../shared/types'
-
-const CHECK_QUESTIONS = 3
 
 type Phase = 'intro' | 'flashing' | 'questions'
 
@@ -25,6 +24,7 @@ export function ChunkReadingBlock({
   passage,
   targetCpm,
   chunkLevel,
+  minutes,
   onComplete,
 }: TrainingBlockProps) {
   const [phase, setPhase] = useState<Phase>('intro')
@@ -35,7 +35,7 @@ export function ChunkReadingBlock({
     () => buildChunkGroups(passage.chunks, chunkLevel),
     [passage.chunks, chunkLevel],
   )
-  const questions = passage.questions.slice(0, CHECK_QUESTIONS)
+  const questions = readCheckQuestions(passage.questions, minutes)
   const current = groups[index]
 
   // 更新関数の中で別の状態を変えない（純粋に保つ）ため、現在値から判断する

@@ -243,7 +243,11 @@ export function generateDailyPlan(input: GenerateDailyPlanInput): DailyTrainingP
   })
 
   const budget = PLAN.optionalBudget[input.totalMinutes]
-  const maxBlocks = Math.floor(budget / PLAN.optionalBlockMinMinutes)
+  // 予算で入るだけ詰めず、上限数で頭を打たせる（1ブロックを長く保つため）。
+  const maxBlocks = Math.min(
+    PLAN.optionalBlockCount[input.totalMinutes],
+    Math.floor(budget / PLAN.optionalBlockMinMinutes),
+  )
   const selected = selectOptionalTrainings({
     profile: input.profile,
     available,

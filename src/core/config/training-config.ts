@@ -4,6 +4,7 @@
  * 詳細な根拠は docs/TRAINING_LOGIC.md を参照。
  */
 import type { ChunkLevel, PlanDuration } from '../types/common'
+import type { QuestionType } from '../types/passage'
 import type { SkillId } from '../types/skill'
 import type { TrainingType } from '../types/training'
 
@@ -70,6 +71,59 @@ export const CHUNKING = {
 }
 
 /**
+ * 1ブロックあたりの設問数。
+ *
+ * ブロックごとに設問を持たせると、30分のセッションで選択式が 20 問を超える。
+ * 「読む時間より答える時間のほうが長い」と感じさせると訓練が続かないため、
+ * 測定精度を保てる最小限まで絞る。設問そのものは教材に残し、
+ * 出題する組み合わせだけを変える（教材の作り直しは不要）。
+ */
+export const QUESTIONS = {
+  /**
+   * 読めていたかを確かめるだけのブロック（Speed Push / Chunk Reading / Regression Control）。
+   * 3問より減らすと正答率が 0 / 50 / 100 の三値になり、
+   * レベル調整の閾値（0.6 / 0.85）に対して「維持」の帯が消えるため上限はここで止める。
+   */
+  readCheck: 3,
+  /**
+   * 理解度を測るブロック。Skill Profile と速度調整の主入力。
+   * 5問すべては出さず、Structure Reading と重複しない種別を優先して出す。
+   * 4問を割ると正答率が 0 / 33 / 67 / 100 になり、
+   * 合格ライン（70%）を満たせるのが「全問正解」だけになるため、ここは時間で減らさない。
+   */
+  comprehension: 4,
+  /**
+   * Structure Reading で要約を問う段落数の上限。
+   * 本文は全段落を読ませたうえで、設問だけをこの数に絞る
+   * （読み飛ばすと同じ教材を使う Comprehension / Immediate Recall が成立しない）。
+   */
+  structureProbes: 3,
+  /** 時間の短いブロックでも、これ未満には減らさない（1問では正答率にならない）。 */
+  minPerBlock: 2,
+  /**
+   * 設問に使ってよいのはブロック時間のこの割合まで。残りは読む時間に充てる。
+   * これがないと、2分のブロックにも6分のブロックと同じ数の設問が並び、
+   * 短いセッションほど「読むより答えている」状態になる。
+   */
+  timeShare: 1 / 3,
+  /** 選択式1問あたりの想定所要時間（秒）。設問数を時間から出すために使う。 */
+  secondsPerQuestion: 15,
+  /**
+   * Comprehension で優先度を下げる設問種別。
+   * Structure Reading と同じ教材を使うため、構成を問う設問は直前の出題と重複する。
+   */
+  deprioritizedInComprehension: ['structure'],
+} as const satisfies {
+  readCheck: number
+  comprehension: number
+  structureProbes: number
+  minPerBlock: number
+  timeShare: number
+  secondsPerQuestion: number
+  deprioritizedInComprehension: readonly QuestionType[]
+}
+
+/**
  * Daily Training の配分（分）。
  *
  * 毎日必ず行う「コア」と、Skill Profile に応じて選ぶ「任意ブロック」に分ける。
@@ -102,6 +156,15 @@ export const PLAN = {
   },
   /** 任意ブロックに配れる合計時間（分） */
   optionalBudget: { 30: 9, 20: 5, 10: 2 },
+  /**
+   * 1日に出す任意ブロックの上限数。
+   *
+   * 予算を下限で割り切ると 30 分で 4 ブロックまで入り、
+   * コアと合わせて 10 ブロック・設問6ラウンドになる。
+   * ブロックを刻むほど 1 つあたりは intro と設問で埋まり、訓練の中身が痩せる。
+   * 数を絞って 1 ブロックを長くする。
+   */
+  optionalBlockCount: { 30: 2, 20: 1, 10: 1 },
   /** 任意ブロック1つあたりの下限・上限（分） */
   optionalBlockMinMinutes: 2,
   optionalBlockMaxMinutes: 5,
@@ -117,6 +180,7 @@ export const PLAN = {
 } as const satisfies {
   core: Record<PlanDuration, Partial<Record<TrainingType, number>>>
   optionalBudget: Record<PlanDuration, number>
+  optionalBlockCount: Record<PlanDuration, number>
   optionalBlockMinMinutes: number
   optionalBlockMaxMinutes: number
   delayedRecallMinutes: number

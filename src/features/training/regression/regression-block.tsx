@@ -9,6 +9,7 @@ import {
   evaluateRegression,
   type RegressionEvaluation,
 } from '@/core/training/regression'
+import { readCheckQuestions } from '@/core/training/question-set'
 import { getPassageById } from '@/data/content'
 import { getRepository } from '@/data/repositories'
 import { PacedText } from '../shared/paced-text'
@@ -19,7 +20,6 @@ import type { TrainingBlockProps } from '../shared/types'
 
 /** 1回の読み戻しで戻る文字数。段落1つぶんに相当する量を目安にする。 */
 const REWIND_CHARS = 80
-const CHECK_QUESTIONS = 3
 
 type Phase = 'intro' | 'reading' | 'questions' | 'result'
 
@@ -38,13 +38,21 @@ interface Measurement {
  * 読み戻しは禁止しない。必要だと判断したときは戻れる。
  * 読み戻りが減っても理解度が大きく落ちていれば「速度過剰」と判定する。
  */
-export function RegressionBlock({ passage, targetCpm, onComplete }: TrainingBlockProps) {
+export function RegressionBlock({
+  passage,
+  targetCpm,
+  minutes,
+  onComplete,
+}: TrainingBlockProps) {
   const [phase, setPhase] = useState<Phase>('intro')
   const [measurement, setMeasurement] = useState<Measurement | null>(null)
   const [evaluation, setEvaluation] = useState<RegressionEvaluation | null>(null)
   const [comprehensionScore, setComprehensionScore] = useState<number | null>(null)
 
-  const questions = useMemo(() => passage.questions.slice(0, CHECK_QUESTIONS), [passage.questions])
+  const questions = useMemo(
+    () => readCheckQuestions(passage.questions, minutes),
+    [minutes, passage.questions],
+  )
 
   const handleReachEnd = useCallback((result: Measurement) => {
     setMeasurement(result)

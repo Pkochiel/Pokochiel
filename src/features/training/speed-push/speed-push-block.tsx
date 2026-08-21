@@ -4,14 +4,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { calculateCpm } from '@/core/metrics/cpm'
 import { scoreComprehension } from '@/core/metrics/comprehension'
+import { readCheckQuestions } from '@/core/training/question-set'
 import { TrainingHud } from '../shared/training-hud'
 import { PacedText } from '../shared/paced-text'
 import { QuestionRunner } from '../shared/question-runner'
 import { usePacer } from '../shared/use-pacer'
 import type { TrainingBlockProps } from '../shared/types'
-
-/** Speed Push の理解度チェックは短く済ませる。速度適応はセッション全体の実績で行う。 */
-const QUICK_CHECK_QUESTIONS = 3
 
 type Phase = 'intro' | 'reading' | 'questions'
 
@@ -29,7 +27,7 @@ export function SpeedPushBlock({ passage, targetCpm, minutes, onComplete }: Trai
     pauseCount: number
   } | null>(null)
 
-  const questions = passage.questions.slice(0, QUICK_CHECK_QUESTIONS)
+  const questions = readCheckQuestions(passage.questions, minutes)
 
   const handleReachEnd = useCallback(
     (result: { elapsedSeconds: number; pauseCount: number }) => {

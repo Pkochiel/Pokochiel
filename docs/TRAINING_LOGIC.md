@@ -146,6 +146,11 @@ generateDailyPlan(input: {
 | コア | Comprehension Test | 4 | 3 | 2 |
 | コア | Immediate Recall | 4 | 3 | 1 |
 | 任意 | 予算（合計） | 9 | 5 | 2 |
+| 任意 | ブロック数の上限 | 2 | 1 | 1 |
+
+任意ブロックは予算で入るだけ詰めない。予算を下限（2分）で割り切ると 30分で4ブロック入り、
+コアと合わせて10ブロックになる。ブロックを刻むほど1つあたりが intro と設問で埋まり、
+訓練そのものの時間が痩せるため、**数を絞って1ブロックを長くする**。
 
 任意ブロックの候補と、それが鍛えるスキル：
 
@@ -165,12 +170,54 @@ Regression Control  → Reading Speed
    - 既知の弱点の解消を最優先し、その次に「まだ測っていない」を優先する
    - 同順位のときは日付由来の回転で順番を変え、同じ内容が毎日続かないようにする
    - 対応教材がないトレーニング（Prediction の停止位置、Variable Speed の区間定義）は候補から外す
-4. 予算を選ばれたブロックへ分配（1ブロック 2〜5分）
+4. 予算を選ばれたブロックへ分配（1ブロック 2〜5分、**1日あたり 30分:2 / 20分:1 / 10分:1 ブロックまで**）
 5. 教材を割り当てる。Speed Push / Chunk / Prediction / Variable Speed / Regression には別々の教材、
    Comprehension と Immediate Recall は Structure Reading と同じ教材（読んだものを問う）
 6. 生成理由（`generatedReason`）を残す
 
 **合計時間は必ず `totalMinutes` に一致する。** 同じ入力からは常に同じ構成が出る（乱数を使わない）。
+
+### 1セッションの設問量
+
+**設問はブロックごとに独立して決まるため、1ブロックずつ見ている限りは常に「3問だけ」に見える。
+効いてくるのは合計である。** 見直し前は次の状態だった。
+
+| セッション | ブロック数 | 選択式の設問（中央値） | 設問を出すブロック数 |
+|---|---|---|---|
+| 10分 | 7 | 13–18（16） | 3–4 |
+| 20分 | 8 | 16–21（21） | 4–5 |
+| 30分 | 10 | 20–25（24） | 6–7 |
+
+30分のセッションで24問。さらに **10分と20分の設問数がほぼ同じ**だった
+（設問数がブロックの割り当て時間とまったく無関係だったため、短いセッションほど密度が高い）。
+
+見直し後：
+
+| セッション | ブロック数 | 選択式の設問（中央値） | 設問を出すブロック数 |
+|---|---|---|---|
+| 10分 | 7 | 8–13（10） | 3–4 |
+| 20分 | 7 | 10–15（13） | 3–4 |
+| 30分 | 8 | 11–18（18） | 4–5 |
+
+規則は3つ。
+
+1. **設問数はブロックの割り当て時間から出す**（`QUESTIONS.timeShare` / `secondsPerQuestion`）。
+   設問に使ってよいのはブロック時間の 1/3 まで、1問あたり15秒で見積もる。
+   2分のブロックは2問、3分以上で上限の3問。下限は2問（1問では正答率にならない）。
+2. **Structure Reading は本文を全段落読ませ、設問だけを間引く**（最大3段落・最初と最後を必ず含む）。
+   段落を読み飛ばすと、同じ教材を使う Comprehension / Immediate Recall が成立しない。
+3. **Comprehension は5問すべてを出さず4問**。直前の Structure Reading と同じ教材のため、
+   構成（`structure`）を問う設問は観点が重複する。これを最初に落とす。
+
+減らさないもの：
+
+- **Comprehension の4問**は時間で減らさない。3問にすると正答率が 0 / 33 / 67 / 100 となり、
+  合格ライン70%を満たせるのが全問正解だけになる。
+- **読み確認の上限3問**も下げない。2問だと 0 / 50 / 100 の三値になり、
+  レベル調整の閾値（0.6 / 0.85）に対して「維持」の帯が消える。
+- **Meaning Flash の5件**はフラッシュの正誤そのものが訓練であり、読後の確認設問ではない。
+
+上限は `src/data/content/session-question-load.test.ts` が実教材とプラン生成から数えて固定している。
 
 ### コア配分の重み付け（明示ルール）
 
@@ -243,11 +290,11 @@ displayMs = clamp(chunkChars / (targetCpm / 60) * 1000, minDisplayMs, maxDisplay
 | 01 | Speed Push | Reading Speed | 目標速度で読み、直後に理解度を確認 | cpm, targetCpm, comprehension |
 | 02 | Chunk Reading | Chunk Recognition | チャンク表示後の理解度 × レベル | level, comprehension |
 | 03 | Meaning Flash | Meaning Extraction | 短時間露出後の意味選択の正答率 | accuracyScore, exposureMs, level |
-| 04 | Structure Reading | Structure Recognition | 段落要旨の正答率 | comprehension |
+| 04 | Structure Reading | Structure Recognition | 段落要旨の正答率（全段落を読み、最大3段落を問う） | comprehension |
 | 05 | Prediction Reading | Prediction | 予測の論理方向と論点の合致 | accuracyScore |
 | 06 | Variable Speed | Adaptive Reading | 区間ごとの選択速度と推奨帯の一致率 | accuracyScore |
 | 07 | Regression Control | Reading Speed（無駄な読み戻りの抑制） | 読み戻り密度 × 理解度 | backCount, pauseCount, cpm, comprehension |
-| 08 | Comprehension Test | Comprehension | 5種の設問の正答率 | comprehension |
+| 08 | Comprehension Test | Comprehension | 5種のうち4問の正答率（構成を問う設問は Structure と重複するため外す） | comprehension |
 | 09 | Immediate Recall | Immediate Recall | Key Point の照合 | immediateRecallScore |
 | 10 | Next-day Recall | Delayed Recall | 同上（翌日） | recallScore（recall_tasks） |
 

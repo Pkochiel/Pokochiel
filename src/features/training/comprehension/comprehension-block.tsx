@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { scoreComprehension } from '@/core/metrics/comprehension'
 import type { AnswerRecord } from '@/core/metrics/comprehension'
+import { comprehensionQuestions } from '@/core/training/question-set'
 import { cn } from '@/lib/cn'
 import { QuestionRunner } from '../shared/question-runner'
 import type { TrainingBlockProps } from '../shared/types'
@@ -11,17 +12,21 @@ import type { TrainingBlockProps } from '../shared/types'
 /**
  * Training 08: Comprehension Test
  *
- * 読書後に必ず理解度を測る。5種の設問タイプを含み、暗記だけでは解けないようにする。
- * 回答後に解説を見せ、どこで取り違えたのかを確認できるようにする。
+ * 読書後に必ず理解度を測る。暗記だけでは解けない設問を選び、
+ * 回答後に解説を見せて、どこで取り違えたのかを確認できるようにする。
+ *
+ * 教材の設問を全問は出さない。直前の Structure Reading と同じ教材を使うため、
+ * 構成を問う設問は観点が重複する。出題は core/training/question-set が決める。
  */
 export function ComprehensionBlock({ passage, onComplete }: TrainingBlockProps) {
   const [answers, setAnswers] = useState<AnswerRecord[] | null>(null)
+  const questions = useMemo(() => comprehensionQuestions(passage.questions), [passage.questions])
 
   if (!answers) {
     return (
       <Centered>
         <QuestionRunner
-          questions={passage.questions}
+          questions={questions}
           title="Comprehension Test"
           onComplete={setAnswers}
         />
@@ -29,7 +34,7 @@ export function ComprehensionBlock({ passage, onComplete }: TrainingBlockProps) 
     )
   }
 
-  const result = scoreComprehension(passage.questions, answers)
+  const result = scoreComprehension(questions, answers)
 
   return (
     <Centered>
@@ -44,7 +49,7 @@ export function ComprehensionBlock({ passage, onComplete }: TrainingBlockProps) 
       </h2>
 
       <ul className="mt-6 space-y-3">
-        {passage.questions.map((question) => {
+        {questions.map((question) => {
           const detail = result.details.find((d) => d.questionId === question.id)
           const chosen = question.choices.find((c) => c.id === detail?.selectedChoiceId)
           const correct = question.choices.find((c) => c.id === question.correctChoiceId)
