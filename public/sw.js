@@ -17,7 +17,14 @@
  *   2. HTML をキャッシュに入れるとき、その HTML が参照する JS / CSS も併せて取り込む
  *  ファイル名にはハッシュが入るため、新しい HTML が古いチャンクを指すことはない。
  */
-const BUILD = new URL(self.location.href).searchParams.get('build') || 'dev'
+const PARAMS = new URL(self.location.href).searchParams
+const BUILD = PARAMS.get('build') || 'dev'
+/** 末尾スラッシュ構成か（静的書き出し時）。登録 URL から受け取る。 */
+const TRAILING = PARAMS.get('trailing') === '1'
+/** 配信されているパスの接頭辞。'/' か '/<repo>/'。sw.js の位置から導く。 */
+const SCOPE = new URL('./', self.location.href).pathname
+/** 画面のパスを組み立てる。空文字はトップ。 */
+const route = (path) => (path === '' ? SCOPE : `${SCOPE}${path}${TRAILING ? '/' : ''}`)
 const CACHE_PREFIX = 'srl-'
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${BUILD}`
 const ASSET_CACHE = `${CACHE_PREFIX}asset-${BUILD}`
@@ -38,19 +45,19 @@ const TRAINING_TYPES = [
 
 /** オフラインでも 1 日分のトレーニングを完走できる経路。 */
 const SHELL_ROUTES = [
-  '/',
-  '/dashboard',
-  '/training',
-  '/progress',
-  '/recall',
-  '/settings',
-  '/onboarding',
-  '/baseline',
-  '/baseline/read',
-  ...TRAINING_TYPES.map((type) => `/training/${type}`),
-]
+  '',
+  'dashboard',
+  'training',
+  'progress',
+  'recall',
+  'settings',
+  'onboarding',
+  'baseline',
+  'baseline/read',
+  ...TRAINING_TYPES.map((type) => `training/${type}`),
+].map(route)
 
-const OFFLINE_FALLBACK = '/dashboard'
+const OFFLINE_FALLBACK = route('dashboard')
 
 function isCacheable(response) {
   return response && response.ok && response.type === 'basic'
@@ -58,7 +65,8 @@ function isCacheable(response) {
 
 /** HTML から参照している静的アセットの URL を拾う。 */
 function findAssets(html) {
-  return new Set(html.match(/\/_next\/static\/[^"'\\\s)]+/g) ?? [])
+  const pattern = new RegExp(`${SCOPE}_next/static/[^"'\\\\\\s)]+`, 'g')
+  return new Set(html.match(pattern) ?? [])
 }
 
 /** 未取得のアセットだけを取り込む。 */
@@ -179,7 +187,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(handleNavigation(event, request))
     return
   }
-  if (url.pathname.startsWith('/_next/static/')) {
+  if (url.pathname.startsWith(`${SCOPE}_next/static/`)) {
     event.respondWith(handleAsset(request))
     return
   }

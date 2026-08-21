@@ -12,6 +12,17 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
  */
 const buildId = process.env.BUILD_ID ?? `${pkg.version}-${Date.now().toString(36)}`
 
+/**
+ * GitHub Pages 向けの静的書き出し。
+ *
+ * このアプリはサーバー処理を持たない（全ページ静的・データは端末内の IndexedDB）ため、
+ * そのまま静的ホスティングに載る。Pages はリポジトリ名のサブパスで配信されるので
+ * basePath を付け、拡張子なしの URL でも引けるよう trailingSlash を有効にする。
+ * 通常の開発・本番起動（next dev / next start）はこの分岐に入らない。
+ */
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+const staticExport = process.env.STATIC_EXPORT === 'true'
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   /**
@@ -22,9 +33,14 @@ const nextConfig: NextConfig = {
    */
   allowedDevOrigins: ['127.0.0.1'],
   typescript: { ignoreBuildErrors: false },
+  ...(staticExport
+    ? { output: 'export' as const, trailingSlash: true, basePath, assetPrefix: basePath }
+    : {}),
   env: {
     NEXT_PUBLIC_APP_VERSION: pkg.version,
     NEXT_PUBLIC_BUILD_ID: buildId,
+    NEXT_PUBLIC_BASE_PATH: basePath,
+    NEXT_PUBLIC_TRAILING_SLASH: staticExport ? '1' : '0',
   },
 }
 

@@ -52,8 +52,26 @@ npm run check    # typecheck + lint + unit test
 npm run e2e:smoke # Playwright（PR で回すぶん・30秒程度）
 npm run e2e:full  # Playwright（統合時に回すぶん・5分程度）
 
+# GitHub Pages と同じ静的書き出しを手元で作る
+STATIC_EXPORT=true NEXT_PUBLIC_BASE_PATH=/Pokochiel npm run build   # → out/
+
 node scripts/generate-icons.mjs   # PWA アイコンを作り直す
 ```
+
+## 触ってみる（インストール不要）
+
+`main` 相当の開発ブランチへ push すると、GitHub Actions が静的書き出しして GitHub Pages へ配信する。
+
+```
+https://pkochiel.github.io/Pokochiel/
+```
+
+Node.js もターミナルも要らない。PC・スマホのどちらのブラウザからも開け、
+PWA としてホーム画面に追加すればオフラインでも動く。
+記録は開いた端末のブラウザ内（IndexedDB）にだけ残り、端末間では共有されない。
+
+> 配信が始まらない場合は、リポジトリの Settings → Pages → Source を
+> **GitHub Actions** にする（一度だけ）。
 
 ## 起動できないとき
 
