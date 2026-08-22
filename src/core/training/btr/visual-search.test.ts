@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  DIRECTION_PAIRS,
-  KANJI_LINE,
-  KANJI_NUMERALS,
-  buildKanjiLineSheet,
-  buildKanjiLineSheets,
-  buildSpeedCheckSheet,
-  speedCheckTargetFor,
-} from './sheets'
+import { DIRECTION_PAIRS, buildSpeedCheckSheet, speedCheckTargetFor } from './sheets'
 import { buildSearchSheet, combineSearchResults, scoreSearch } from './visual-search'
 
 const sheet = (seed = 'day') =>
@@ -169,37 +161,6 @@ describe('combineSearchResults', () => {
       total: 0,
       precision: 0,
     })
-  })
-})
-
-describe('漢数字一行の盤面', () => {
-  it('横30・縦3で作る', () => {
-    const built = buildKanjiLineSheet('day', '一')
-    expect(built.columns).toBe(30)
-    expect(built.rows).toBe(3)
-    expect(built.cells).toHaveLength(90)
-  })
-
-  it('一〜十の漢数字だけで埋める', () => {
-    const labels = new Set(buildKanjiLineSheet('day', '一').cells.map((cell) => cell.label))
-    for (const label of labels) expect(KANJI_NUMERALS).toContain(label)
-  })
-
-  it('一・二・三の3ターンぶんを作る', () => {
-    const sheets = buildKanjiLineSheets('day')
-    expect(sheets.map((s) => s.targetLabel)).toEqual([...KANJI_LINE.targets])
-  })
-
-  it('ターンごとに盤面が変わる', () => {
-    const [first, second] = buildKanjiLineSheets('day')
-    expect(first?.cells.map((c) => c.label)).not.toEqual(second?.cells.map((c) => c.label))
-  })
-
-  it('90秒で拾い切れる量に収める', () => {
-    for (const built of buildKanjiLineSheets('day')) {
-      expect(built.targetCount).toBeGreaterThan(4)
-      expect(built.targetCount).toBeLessThan(20)
-    }
   })
 })
 

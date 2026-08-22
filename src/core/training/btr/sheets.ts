@@ -2,49 +2,13 @@ import { hashString, seededShuffle } from '../../util/seeded-shuffle'
 import { buildSearchSheet, type SearchSheet } from './visual-search'
 
 /**
- * BTRメソッドの盤面。
+ * スピードチェックの盤面。
  *
  * 教室の教材は使わない。盤面は日付を種にした擬似乱数で生成する。
  * 同じ日なら同じ盤、翌日は別の盤になる。
- */
-
-/** 漢数字一行で使う記号。一〜十。 */
-export const KANJI_NUMERALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'] as const
-
-/**
- * 漢数字一行の盤面。
  *
- * 一〜十の漢数字で埋めた盤から、対象の数字だけを拾う。
- * 教室では「一を探すターン」「二を探すターン」「三を探すターン」があり、各90秒。
+ * 漢数字一行は縦書きの列という別の形なので pattern-sheet.ts にある。
  */
-export const KANJI_LINE = {
-  /** 横に並ぶ数 */
-  columns: 30,
-  /** 縦に並ぶ数 */
-  rows: 3,
-  /** ターンごとに探す対象。この順で3ターン行う。 */
-  targets: ['一', '二', '三'] as const,
-  /** 1ターンの制限時間（ms） */
-  turnMs: 90_000,
-} as const
-
-export function buildKanjiLineSheet(seed: string, target: string): SearchSheet {
-  return buildSearchSheet({
-    id: `kanji-line-${target}`,
-    columns: KANJI_LINE.columns,
-    rows: KANJI_LINE.rows,
-    symbols: KANJI_NUMERALS,
-    targetLabel: target,
-    // 一〜十が均等に出るなら1/10。均等より少し多めに置き、90秒で拾い切れる量にする。
-    targetRatio: 0.12,
-    seed,
-  })
-}
-
-/** 漢数字一行の3ターンぶんの盤面。 */
-export function buildKanjiLineSheets(seed: string): SearchSheet[] {
-  return KANJI_LINE.targets.map((target) => buildKanjiLineSheet(seed, target))
-}
 
 /** スピードチェックで使う方角漢字。 */
 export const DIRECTION_KANJI = ['東', '西', '南', '北'] as const
