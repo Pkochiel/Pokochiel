@@ -2,7 +2,6 @@ import type { z } from 'zod'
 import type {
   BtrResult,
   ChunkLevel,
-  DailyTrainingPlan,
   LocalDate,
   Profile,
   ReadingTest,
@@ -30,7 +29,6 @@ import type {
 } from './types'
 import {
   btrResultSchema,
-  planSchema,
   profileSchema,
   readingTestSchema,
   recallTaskSchema,
@@ -352,28 +350,6 @@ export class RecordStoreRepository implements TrainingRepository {
       completedAt: result.completedAt,
     }
     await this.deps.store.put('recallTasks', completed)
-  }
-
-  // ---- Plans ----------------------------------------------------------
-
-  private async listPlans(): Promise<DailyTrainingPlan[]> {
-    const plans = (await this.readAll('plans', planSchema)) as unknown as DailyTrainingPlan[]
-    return [...plans].sort((a, b) => compareLocalDate(a.planDate, b.planDate))
-  }
-
-  async getPlan(date: LocalDate): Promise<DailyTrainingPlan | null> {
-    const plans = await this.listPlans()
-    return plans.find((p) => p.planDate === date) ?? null
-  }
-
-  async savePlan(plan: DailyTrainingPlan): Promise<DailyTrainingPlan> {
-    // 1 日 1 プラン。作り直したときに古い行を残さない。
-    const stale = (await this.listPlans()).filter(
-      (p) => p.planDate === plan.planDate && p.id !== plan.id,
-    )
-    for (const old of stale) await this.deps.store.remove('plans', old.id)
-    await this.deps.store.put('plans', plan)
-    return plan
   }
 
   // ---- Reset ----------------------------------------------------------

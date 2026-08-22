@@ -2,7 +2,6 @@ import type {
   BaselineProfile,
   BtrResult,
   ChunkLevel,
-  DailyTrainingPlan,
   Difficulty,
   LocalDate,
   PlanDuration,
@@ -140,9 +139,6 @@ export interface TrainingRepository {
     id: string,
     result: { recallScore: number; recallText: string; completedAt: string },
   ): Promise<void>
-
-  getPlan(date: LocalDate): Promise<DailyTrainingPlan | null>
-  savePlan(plan: DailyTrainingPlan): Promise<DailyTrainingPlan>
 
   /** 開発・テスト用。保存済みデータを消す。 */
   reset(): Promise<void>

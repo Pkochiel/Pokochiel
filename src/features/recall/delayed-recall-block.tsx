@@ -10,12 +10,22 @@ import type { RecallTask, TrainingPassage } from '@/core/types'
 import { cn } from '@/lib/cn'
 import { getPassageById } from '@/data/content'
 import { getRepository, resolveTimezone } from '@/data/repositories'
-import type { BlockOutcome } from '@/features/training/shared/types'
+
+/**
+ * 想起を終えたときに返すもの。
+ *
+ * 翌日の想起は単独の画面としてしか使っていないので、
+ * 返すのは書き出した本文だけでよい。
+ */
+export interface RecallOutcome {
+  readonly recallText?: string | null
+}
+
 
 type Phase = 'loading' | 'empty' | 'input' | 'score'
 
 export interface DelayedRecallBlockProps {
-  onComplete?: (outcome: BlockOutcome) => void
+  onComplete?: (outcome: RecallOutcome) => void
 }
 
 /**

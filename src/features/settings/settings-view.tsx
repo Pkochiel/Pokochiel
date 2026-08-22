@@ -2,18 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { Card, CardHeader } from '@/components/ui/card'
-import { PLAN } from '@/core/config/training-config'
-import type { PlanDuration, Profile } from '@/core/types'
-import { cn } from '@/lib/cn'
+import type { Profile } from '@/core/types'
+import { ButtonLink } from '@/components/ui/button'
 import { getRepository } from '@/data/repositories'
 import { BackupPanel } from './backup-panel'
 
-const DURATIONS: PlanDuration[] = [10, 20, 30]
-
 export function SettingsView() {
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -27,53 +22,25 @@ export function SettingsView() {
     }
   }, [])
 
-  const selectDuration = async (minutes: PlanDuration) => {
-    setSaving(true)
-    const updated = await getRepository().saveProfile({ preferredDurationMinutes: minutes })
-    setProfile(updated)
-    setSaving(false)
-    setSaved(true)
-  }
-
-  const current = profile?.preferredDurationMinutes ?? 30
-
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-fg-muted">
-          トレーニング時間・データの保存と持ち出し
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">設定</h1>
+        <p className="mt-1 text-sm text-fg-muted">基準値と、データの保存・持ち出し</p>
       </header>
 
       <Card>
         <CardHeader
-          title="1日のトレーニング時間"
-          description="選んだ時間に合わせて、翌日以降の構成が自動で組み直されます。"
+          title="1回の長さ"
+          description="始めるたびに選びます。ここでは決めません。"
         />
-        <div className="flex gap-2">
-          {DURATIONS.map((minutes) => (
-            <button
-              key={minutes}
-              type="button"
-              disabled={saving}
-              onClick={() => void selectDuration(minutes)}
-              aria-pressed={current === minutes}
-              className={cn(
-                'tabular flex-1 rounded-xl border py-3 text-sm font-medium transition-colors',
-                current === minutes ? 'border-brand bg-brand-soft text-brand' : 'border-border',
-              )}
-            >
-              {minutes} 分
-            </button>
-          ))}
-        </div>
-        <p className="mt-3 text-xs text-fg-subtle">
-          {current} 分のうち{' '}
-          {Object.values(PLAN.core[current]).reduce((a, b) => a + b, 0)} 分が必須のトレーニング、
-          残り {PLAN.optionalBudget[current]} 分は弱点に応じて選ばれます。
+        <p className="text-sm leading-relaxed text-fg-muted">
+          その日どれだけ取れるかは日によって違うので、トレーニングを始めるときに
+          90 / 45 / 30 / 15 分から選びます。
         </p>
-        {saved ? <p className="mt-2 text-xs text-positive">保存しました。</p> : null}
+        <ButtonLink href="/btr" variant="secondary" size="sm" className="mt-4">
+          トレーニングへ
+        </ButtonLink>
       </Card>
 
       <Card>
