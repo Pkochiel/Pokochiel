@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import { BpSheetBlock } from './bp-sheet-block'
 import { BreathingBlock } from './breathing-block'
 import { ImageMemoryBlock } from './image-memory-block'
+import { KanaPickupBlock } from './kana-pickup-block'
 import { LogicalTestBlock } from './logical-test-block'
 import { NumberRandomBlock } from './number-random-block'
 import { PatternSheetBlock } from './pattern-sheet-block'
@@ -98,7 +99,7 @@ export const BTR_CATALOG: readonly BtrEntry[] = [
     name: 'かなひろい',
     stage: 'focus',
     summary: '物語を読みながら、あ・い・う・え・お を拾う',
-    Component: null,
+    Component: KanaPickupBlock,
   },
   {
     slug: 'logical-test',
