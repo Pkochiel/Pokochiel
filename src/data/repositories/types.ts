@@ -1,5 +1,6 @@
 import type {
   BaselineProfile,
+  BtrResult,
   ChunkLevel,
   DailyTrainingPlan,
   Difficulty,
@@ -52,6 +53,30 @@ export interface TrainingResultInput {
   valid?: boolean
 }
 
+export interface BtrResultInput {
+  sessionId: string
+  exercise: string
+  score: number
+  localDate: LocalDate
+  attempts?: number[]
+  elapsedMs?: number | null
+  timeLimitMs?: number | null
+  accuracy?: number | null
+  level?: number | null
+  /** カウント呼吸法のように小さいほうがよい種目だけ true。 */
+  lowerIsBetter?: boolean
+  cpm?: number | null
+  valid?: boolean
+}
+
+export interface BtrResultQuery {
+  from?: LocalDate
+  to?: LocalDate
+  exercise?: string
+  /** true のとき valid=false の記録を除外する（既定: true） */
+  validOnly?: boolean
+}
+
 export interface ReadingTestInput {
   sessionId: string | null
   passageId: string
@@ -97,6 +122,9 @@ export interface TrainingRepository {
 
   saveResult(input: TrainingResultInput): Promise<TrainingResult>
   listResults(query?: ResultQuery): Promise<TrainingResult[]>
+
+  saveBtrResult(input: BtrResultInput): Promise<BtrResult>
+  listBtrResults(query?: BtrResultQuery): Promise<BtrResult[]>
 
   saveReadingTest(input: ReadingTestInput): Promise<ReadingTest>
   listReadingTests(): Promise<ReadingTest[]>

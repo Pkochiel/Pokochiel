@@ -8,6 +8,7 @@ import {
   type StoredRecord,
 } from '@/data/persistence/record-store'
 import {
+  btrResultSchema,
   planSchema,
   profileSchema,
   readingTestSchema,
@@ -71,6 +72,7 @@ const SCHEMAS: Record<CollectionName, z.ZodType> = {
   readingTests: readingTestSchema,
   recallTasks: recallTaskSchema,
   plans: planSchema,
+  btrResults: btrResultSchema,
 }
 
 const emptyCounts = (): Record<CollectionName, number> => ({
@@ -80,6 +82,7 @@ const emptyCounts = (): Record<CollectionName, number> => ({
   readingTests: 0,
   recallTasks: 0,
   plans: 0,
+  btrResults: 0,
 })
 
 export interface ExportOptions {

@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type {
+  BtrResult,
   ChunkLevel,
   DailyTrainingPlan,
   LocalDate,
@@ -17,6 +18,8 @@ import {
   type RecordStore,
 } from '@/data/persistence/record-store'
 import type {
+  BtrResultInput,
+  BtrResultQuery,
   ProfileInput,
   ReadingTestInput,
   RecallTaskInput,
@@ -26,6 +29,7 @@ import type {
   TrainingResultInput,
 } from './types'
 import {
+  btrResultSchema,
   planSchema,
   profileSchema,
   readingTestSchema,
@@ -210,6 +214,50 @@ export class RecordStoreRepository implements TrainingRepository {
         if (query.to && (!date || compareLocalDate(date, query.to) > 0)) return false
         return true
       })
+  }
+
+  // ---- BTR results ----------------------------------------------------
+
+  /**
+   * BTR の種目1回分を保存する。
+   *
+   * 日付をセッションから引かずに記録そのものが持つ。日替わりで種目を回すのに
+   * 「その種目を最後にやった日」が要り、毎回セッションを突き合わせずに済ませたい。
+   */
+  async saveBtrResult(input: BtrResultInput): Promise<BtrResult> {
+    const result: BtrResult = {
+      id: this.deps.createId(),
+      userId: LOCAL_USER_ID,
+      sessionId: input.sessionId,
+      exercise: input.exercise,
+      score: input.score,
+      attempts: input.attempts ?? [],
+      elapsedMs: input.elapsedMs ?? null,
+      timeLimitMs: input.timeLimitMs ?? null,
+      accuracy: input.accuracy ?? null,
+      level: input.level ?? null,
+      lowerIsBetter: input.lowerIsBetter ?? false,
+      cpm: input.cpm ?? null,
+      valid: input.valid ?? true,
+      localDate: input.localDate,
+      createdAt: this.nowIso(),
+    }
+    await this.deps.store.put('btrResults', result)
+    return result
+  }
+
+  async listBtrResults(query: BtrResultQuery = {}): Promise<BtrResult[]> {
+    const validOnly = query.validOnly ?? true
+
+    return chronologically(
+      (await this.readAll('btrResults', btrResultSchema)) as BtrResult[],
+    ).filter((result) => {
+      if (validOnly && !result.valid) return false
+      if (query.exercise && result.exercise !== query.exercise) return false
+      if (query.from && compareLocalDate(result.localDate, query.from) < 0) return false
+      if (query.to && compareLocalDate(result.localDate, query.to) > 0) return false
+      return true
+    })
   }
 
   // ---- Reading tests --------------------------------------------------

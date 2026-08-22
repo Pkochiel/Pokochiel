@@ -193,3 +193,62 @@ describe('受け付けないファイル', () => {
     expect(await store.list('results')).toHaveLength(1)
   })
 })
+
+describe('BTR の記録の持ち出し', () => {
+  const btrResult = asRecord({
+    id: 'b1',
+    userId: 'local-user',
+    sessionId: 's1',
+    exercise: 'number_random',
+    score: 24,
+    attempts: [22, 20, 18, 24],
+    elapsedMs: 240_000,
+    timeLimitMs: 60_000,
+    accuracy: 92,
+    level: 1,
+    lowerIsBetter: false,
+    cpm: null,
+    valid: true,
+    localDate: '2026-08-22',
+    createdAt: '2026-08-22T09:00:00.000Z',
+  })
+
+  it('書き出して取り込むと元に戻る', async () => {
+    const store = new MemoryRecordStore()
+    await store.put('btrResults', btrResult)
+
+    const snapshot = await exportSnapshot(store, { exportedAt: null, appVersion: null })
+    const restored = new MemoryRecordStore()
+    const result = await importSnapshot(restored, snapshot)
+
+    expect(result.status).toBe('ok')
+    expect(await restored.list('btrResults')).toEqual([btrResult])
+  })
+
+  it('複数試行の並びを保つ', async () => {
+    // 合計や平均に潰れると、どの枚で落ちたかが持ち出せない。
+    const store = new MemoryRecordStore()
+    await store.put('btrResults', btrResult)
+    const restored = new MemoryRecordStore()
+    await importSnapshot(
+      restored,
+      await exportSnapshot(store, { exportedAt: null, appVersion: null }),
+    )
+    const [row] = (await restored.list('btrResults')) as { attempts: number[] }[]
+    expect(row?.attempts).toEqual([22, 20, 18, 24])
+  })
+
+  it('BTR より前のバックアップも取り込める', async () => {
+    // btrResults を持たないファイルが「壊れている」扱いにならないこと。
+    const store = new MemoryRecordStore()
+    await store.put('profile', profile)
+    const snapshot = await exportSnapshot(store, { exportedAt: null, appVersion: null })
+    const withoutBtr = { ...snapshot, data: { ...snapshot.data } }
+    delete (withoutBtr.data as Record<string, unknown>)['btrResults']
+
+    const restored = new MemoryRecordStore()
+    const result = await importSnapshot(restored, withoutBtr)
+    expect(result.status).toBe('ok')
+    expect(await restored.list('btrResults')).toEqual([])
+  })
+})

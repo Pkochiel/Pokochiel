@@ -67,6 +67,13 @@ export const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = [
       for (const collection of COLLECTIONS) createCollection(context, collection)
     },
   },
+  {
+    version: 2,
+    description: 'BTR の種目記録を入れる btrResults を作る',
+    apply: (context) => {
+      createCollection(context, 'btrResults')
+    },
+  },
 ]
 
 /** 現在のスキーマ version。migration を足せば自動で上がる。 */

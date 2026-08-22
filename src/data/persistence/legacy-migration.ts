@@ -14,6 +14,8 @@ const emptyReport = (): Record<CollectionName, number> => ({
   readingTests: 0,
   recallTasks: 0,
   plans: 0,
+  // Phase 1 の localStorage には存在しない collection。移送元がないので常に 0。
+  btrResults: 0,
 })
 
 /**

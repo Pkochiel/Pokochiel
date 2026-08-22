@@ -341,3 +341,122 @@ describe('RecordStoreRepository: 並び順', () => {
     expect(tests.map((t) => t.id)).toEqual(['b', 'a'])
   })
 })
+
+describe('RecordStoreRepository: BTR results', () => {
+  it('保存した内容を読み出せる', async () => {
+    const { repo } = createRepository()
+    const session = await repo.createSession({
+      sessionType: 'btr',
+      startedAt: '2026-08-19T09:00:00Z',
+      localDate: d('2026-08-19'),
+    })
+    await repo.saveBtrResult({
+      sessionId: session.id,
+      exercise: 'saccade',
+      score: 57,
+      localDate: d('2026-08-19'),
+    })
+
+    const [result] = await repo.listBtrResults()
+    expect(result?.exercise).toBe('saccade')
+    expect(result?.score).toBe(57)
+    expect(result?.attempts).toEqual([])
+    expect(result?.valid).toBe(true)
+    expect(result?.lowerIsBetter).toBe(false)
+  })
+
+  it('複数試行のスコアを並びのまま残す', async () => {
+    // 数字ランダムは4枚。合計や平均にすると、どの枚で落ちたかが消える。
+    const { repo } = createRepository()
+    await repo.saveBtrResult({
+      sessionId: 's1',
+      exercise: 'number_random',
+      score: 24,
+      attempts: [22, 20, 18, 24],
+      localDate: d('2026-08-19'),
+    })
+    expect((await repo.listBtrResults())[0]?.attempts).toEqual([22, 20, 18, 24])
+  })
+
+  it('小さいほうがよい種目の印を残す', async () => {
+    // 記録に残さないと、あとから推移グラフの向きを決められない。
+    const { repo } = createRepository()
+    await repo.saveBtrResult({
+      sessionId: 's1',
+      exercise: 'breathing',
+      score: 14,
+      lowerIsBetter: true,
+      localDate: d('2026-08-19'),
+    })
+    expect((await repo.listBtrResults())[0]?.lowerIsBetter).toBe(true)
+  })
+
+  it('制限時間と級を残す', async () => {
+    // 級は制限時間の短縮で表すので、どちらも残さないと比較できない。
+    const { repo } = createRepository()
+    await repo.saveBtrResult({
+      sessionId: 's1',
+      exercise: 'logical_test',
+      score: 26,
+      timeLimitMs: 180_000,
+      level: 2,
+      accuracy: 87,
+      localDate: d('2026-08-19'),
+    })
+    const [result] = await repo.listBtrResults()
+    expect(result?.timeLimitMs).toBe(180_000)
+    expect(result?.level).toBe(2)
+    expect(result?.accuracy).toBe(87)
+  })
+
+  it('種目で絞れる', async () => {
+    const { repo } = createRepository()
+    await repo.saveBtrResult({ sessionId: 's1', exercise: 'saccade', score: 50, localDate: d('2026-08-19') })
+    await repo.saveBtrResult({ sessionId: 's1', exercise: 'kana_pickup', score: 30, localDate: d('2026-08-19') })
+    const results = await repo.listBtrResults({ exercise: 'saccade' })
+    expect(results).toHaveLength(1)
+    expect(results[0]?.exercise).toBe('saccade')
+  })
+
+  it('期間で絞れる', async () => {
+    const { repo } = createRepository()
+    for (const date of ['2026-08-17', '2026-08-19', '2026-08-21']) {
+      await repo.saveBtrResult({ sessionId: 's1', exercise: 'saccade', score: 50, localDate: d(date) })
+    }
+    const results = await repo.listBtrResults({ from: d('2026-08-18'), to: d('2026-08-20') })
+    expect(results.map((r) => r.localDate)).toEqual(['2026-08-19'])
+  })
+
+  it('既定では無効な記録を返さない', async () => {
+    const { repo } = createRepository()
+    await repo.saveBtrResult({ sessionId: 's1', exercise: 'paced_reading', score: 0, valid: false, localDate: d('2026-08-19') })
+    expect(await repo.listBtrResults()).toHaveLength(0)
+    expect(await repo.listBtrResults({ validOnly: false })).toHaveLength(1)
+  })
+
+  it('古い順に並べる', async () => {
+    const { repo, setNow } = createRepository()
+    setNow('2026-08-19T09:00:00Z')
+    await repo.saveBtrResult({ sessionId: 's1', exercise: 'saccade', score: 1, localDate: d('2026-08-19') })
+    setNow('2026-08-20T09:00:00Z')
+    await repo.saveBtrResult({ sessionId: 's2', exercise: 'saccade', score: 2, localDate: d('2026-08-20') })
+    expect((await repo.listBtrResults()).map((r) => r.score)).toEqual([1, 2])
+  })
+
+  it('日付を記録そのものが持つ（セッションを引かずに済む）', async () => {
+    // 日替わりで種目を回すのに「最後にやった日」が要る。
+    const { repo } = createRepository()
+    await repo.saveBtrResult({ sessionId: 'どこにもないセッション', exercise: 'saccade', score: 1, localDate: d('2026-08-19') })
+    expect((await repo.listBtrResults())[0]?.localDate).toBe('2026-08-19')
+  })
+
+  it('BTR のセッションを作れる', async () => {
+    const { repo } = createRepository()
+    const session = await repo.createSession({
+      sessionType: 'btr',
+      startedAt: '2026-08-19T09:00:00Z',
+      localDate: d('2026-08-19'),
+    })
+    expect((await repo.listSessions()).map((s) => s.id)).toContain(session.id)
+  })
+})

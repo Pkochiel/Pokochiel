@@ -46,7 +46,7 @@ export const sessionSchema = z.object({
   startedAt: z.string(),
   completedAt: z.string().nullable(),
   durationSeconds: z.number().nonnegative().nullable(),
-  sessionType: z.enum(['baseline', 'daily', 'single', 'recall']),
+  sessionType: z.enum(['baseline', 'daily', 'single', 'recall', 'btr']),
   localDate,
 })
 
@@ -138,5 +138,30 @@ export const planSchema = z.object({
     .object({ weakestSkills: z.array(z.string()), notes: z.array(z.string()) })
     .nullable(),
   completedAt: z.string().nullable(),
+  createdAt: z.string(),
+})
+
+/**
+ * BTR の種目記録。
+ *
+ * 既存の resultSchema とは別に持つ。BTR の受講記録は「種目ごとの数値の並び」で、
+ * CPM や理解度を軸にしたものではない。同じ表に押し込むと、
+ * どちらの種目でも使われない列が並ぶ。
+ */
+export const btrResultSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  sessionId: z.string(),
+  exercise: z.string(),
+  score: z.number(),
+  attempts: z.array(z.number()).default([]),
+  elapsedMs: z.number().nonnegative().nullable().default(null),
+  timeLimitMs: z.number().nonnegative().nullable().default(null),
+  accuracy: score,
+  level: z.number().int().nonnegative().nullable().default(null),
+  lowerIsBetter: z.boolean().default(false),
+  cpm: z.number().nonnegative().nullable().default(null),
+  valid: z.boolean().default(true),
+  localDate,
   createdAt: z.string(),
 })

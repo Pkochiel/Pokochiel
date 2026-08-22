@@ -17,6 +17,7 @@ export const COLLECTIONS = [
   'readingTests',
   'recallTasks',
   'plans',
+  'btrResults',
 ] as const
 
 export type CollectionName = (typeof COLLECTIONS)[number]

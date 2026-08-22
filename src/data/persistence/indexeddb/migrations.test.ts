@@ -74,6 +74,22 @@ describe('出荷しているスキーマ', () => {
     expect(new Set(versions).size).toBe(versions.length)
   })
 
+  it('出荷している migration で v1 の端末から btrResults が生える', async () => {
+    // BTR へ移る前から使っている端末が、記録を失わずに新しい collection を得ること。
+    const factory = new IDBFactory()
+    const before = new IndexedDbRecordStore({ factory, migrations: [SCHEMA_MIGRATIONS[0]!] })
+    await before.putMany('results', [asRecord({ id: 'r1', cpm: 700 })])
+    await before.put('profile', asRecord({ id: 'local-user', baselineCpm: 620 }))
+    await before.close()
+
+    const after = new IndexedDbRecordStore({ factory })
+    const database = await after.open()
+
+    expect(database.objectStoreNames.contains('btrResults')).toBe(true)
+    expect(await after.list('results')).toHaveLength(1)
+    expect(await after.get('profile', 'local-user')).toMatchObject({ baselineCpm: 620 })
+  })
+
   it('新規の端末では全 collection が作られる', async () => {
     const store = new IndexedDbRecordStore({ factory: new IDBFactory() })
     const database = await store.open()

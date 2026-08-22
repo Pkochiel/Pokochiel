@@ -20,6 +20,7 @@ export const LOCAL_STORAGE_KEYS: Record<CollectionName, string> = {
   readingTests: 'srl:v1:reading_tests',
   recallTasks: 'srl:v1:recall_tasks',
   plans: 'srl:v1:plans',
+  btrResults: 'srl:v1:btr_results',
 }
 
 /** profile は 1 件しかないため、配列ではなく単体で保存されている。 */
