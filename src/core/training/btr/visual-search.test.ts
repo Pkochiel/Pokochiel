@@ -3,10 +3,8 @@ import {
   DIRECTION_PAIRS,
   KANJI_LINE,
   KANJI_NUMERALS,
-  NUMBER_RANDOM,
   buildKanjiLineSheet,
   buildKanjiLineSheets,
-  buildNumberRandomSheets,
   buildSpeedCheckSheet,
   speedCheckTargetFor,
 } from './sheets'
@@ -234,36 +232,5 @@ describe('スピードチェックの盤面', () => {
 
   it('探す組み合わせは必ず候補のひとつ', () => {
     expect(DIRECTION_PAIRS).toContain(speedCheckTargetFor('2026-09-01'))
-  })
-})
-
-describe('数字ランダムの盤面', () => {
-  it('4枚のシートを作る', () => {
-    expect(buildNumberRandomSheets('day')).toHaveLength(NUMBER_RANDOM.sheets)
-  })
-
-  it('1 から最大値までを重複なく並べる', () => {
-    for (const built of buildNumberRandomSheets('day')) {
-      expect([...built.numbers].sort((a, b) => a - b)).toEqual(
-        Array.from({ length: built.max }, (_, i) => i + 1),
-      )
-    }
-  })
-
-  it('シートごとに並びが違う', () => {
-    const sheets = buildNumberRandomSheets('day')
-    expect(sheets[0]?.numbers).not.toEqual(sheets[1]?.numbers)
-  })
-
-  it('同じ種なら同じ並びになる', () => {
-    expect(buildNumberRandomSheets('day')[0]?.numbers).toEqual(
-      buildNumberRandomSheets('day')[0]?.numbers,
-    )
-  })
-
-  it('日が変われば並びが変わる', () => {
-    expect(buildNumberRandomSheets('day-a')[0]?.numbers).not.toEqual(
-      buildNumberRandomSheets('day-b')[0]?.numbers,
-    )
   })
 })

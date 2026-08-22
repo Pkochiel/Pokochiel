@@ -1,15 +1,18 @@
 /**
- * イメージボード（BTRメソッド 読書内容への集中）
+ * イメージ記憶 / イメージボード（BTRメソッド 読書内容への集中）
  *
- * 40個の単語を制限時間内に覚え、思い出せたものを答える。
- * **同じ単語で2セット**行う。1セット目で取りこぼしたものが2セット目で拾えるかを見る。
- * 級が上がるごとに制限時間が短くなる。
+ * **40個の単語を制限時間内に覚え、思い出せたものを答える。同じ単語で2セット行う。**
+ * 級が上がるごとに制限時間が短くなる（2分 → 1分30秒 → 1分 → 45秒 → 30秒）。
  *
- * イメージ記憶とは別の種目である。
- * イメージ記憶は上下に並んだ2語を結ぶイメージを作るが、こちらは40語の並びをそのまま覚える。
+ * 単語は上下に並べて出す。上下2語を結ぶ具体的なイメージを作って覚えるのがこの種目のこつで、
+ * 強く印象的なイメージほど残る。
+ *
+ * スクールの案内では「イメージボード」と「イメージ記憶」が別の名前で挙がっているが、
+ * 受講した人の話では同じ語彙を使う同じ訓練とのことなので、ひとつの種目として実装する。
+ * 別物だと分かったら分ける。
  */
 
-export const IMAGE_BOARD = {
+export const IMAGE_MEMORY = {
   /** 1回に出す単語数 */
   wordCount: 40,
   /** 同じ単語で行うセット数 */
@@ -19,23 +22,20 @@ export const IMAGE_BOARD = {
    * 初級は2分。イメージ記憶と同じ詰め方に揃えている。
    */
   timeLimits: [120_000, 90_000, 60_000, 45_000, 30_000],
-  /**
-   * 次の段へ上がる正答数（2セット合計に対する割合ではなく、1セットの再生数）。
-   * イメージ記憶が40語中36点で次の段へ進むのに合わせている。
-   */
+  /** 次の段へ上がる再生数。40語中36語で次の段へ進む。 */
   advanceRecalled: 36,
   /** ひとつ前の段へ戻る再生数 */
   fallbackRecalled: 24,
 } as const
 
-export interface ImageBoardSet {
+export interface ImageMemorySet {
   /** 何セット目か（0 始まり） */
   readonly index: number
   /** 再生できた単語 */
   readonly recalled: readonly string[]
 }
 
-export interface ImageBoardSetResult {
+export interface ImageMemorySetResult {
   readonly index: number
   /** 正しく再生できた数 */
   readonly recalled: number
@@ -44,10 +44,10 @@ export interface ImageBoardSetResult {
   readonly total: number
 }
 
-export interface ImageBoardResult {
+export interface ImageMemoryResult {
   /** 各セットの再生数。記録にはこの並びを残す。 */
   readonly attempts: readonly number[]
-  readonly sets: readonly ImageBoardSetResult[]
+  readonly sets: readonly ImageMemorySetResult[]
   /**
    * 主スコア。**2セットのうち良いほう**を採る。
    * 合計にすると同じ単語を2回数えることになり、覚えられた語数を表さない。
@@ -63,14 +63,14 @@ function normalize(word: string): string {
   return word.trim().replace(/[\s　]+/g, '')
 }
 
-export function scoreImageBoard(
+export function scoreImageMemory(
   words: readonly string[],
-  sets: readonly ImageBoardSet[],
-): ImageBoardResult {
+  sets: readonly ImageMemorySet[],
+): ImageMemoryResult {
   const answerKey = new Set(words.map(normalize))
   const union = new Set<string>()
 
-  const results = sets.map((set): ImageBoardSetResult => {
+  const results = sets.map((set): ImageMemorySetResult => {
     // 同じ語を並べても1回として数える。
     const unique = new Set(set.recalled.map(normalize))
     let recalled = 0
