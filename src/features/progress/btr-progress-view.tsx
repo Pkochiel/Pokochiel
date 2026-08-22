@@ -85,7 +85,9 @@ export function BtrProgressView() {
                     lowerIsBetter={trend.lowerIsBetter}
                     label={`${trend.name} の推移`}
                     className={cn(
-                      'hidden shrink-0 sm:block',
+                      // 幅の狭い画面では細く。上がっているか下がっているかは
+                      // 短くても読めるので、隠すより縮めるほうがよい。
+                      'w-12 shrink-0 sm:w-[120px]',
                       trend.direction === 'down' ? 'text-negative' : 'text-brand',
                     )}
                   />

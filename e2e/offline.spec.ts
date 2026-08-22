@@ -3,17 +3,16 @@ import { expect, test, type Page } from '@playwright/test'
 import {
   clearStoredData,
   readCollection,
-  readProfile,
   waitForRecords,
   waitForServiceWorker,
 } from './helpers/storage'
 
-const DASHBOARD_HEADING = /今日の\d+分トレーニングを開始/
+const DASHBOARD_HEADING = /今日のトレーニング|今日はもう済んでいます/
 
 /**
  * Phase 2 の要件確認。
  *
- * インターネット接続とアカウント登録が無くても、Training / Progress / Recall が
+ * インターネット接続とアカウント登録が無くても、トレーニング / 推移 / 想起が
  * そのまま使えること。Cloud 同期は存在しない前提で全機能が動く必要がある。
  */
 
@@ -93,23 +92,26 @@ test('オフラインのままトレーニング画面まで開ける', async ({
   await expect(page.getByRole('button', { name: 'はじめる' })).toBeVisible()
 
   await page.goto('/progress')
-  await expect(page.getByRole('tablist', { name: '表示期間' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '推移' })).toBeVisible()
   await context.setOffline(false)
 })
 
-test('オフラインで保存した内容が、再読み込み後も残る', async ({ page, context }) => {
-  await page.goto('/settings')
+test('オフラインで登録した本が、再読み込み後も残る', async ({ page, context }) => {
+  // 本の控えは記録用の保存先とは別（設定にあたるので単独の鍵で持っている）。
+  // そちらもオフラインで書けることを確かめる。
+  await page.goto('/btr/paced-reading')
   await waitForServiceWorker(page)
 
   await context.setOffline(true)
-  await page.getByRole('button', { name: '20 分' }).click()
-  await expect(page.getByText('保存しました。')).toBeVisible()
+  await page.getByRole('button', { name: '本を選ぶ' }).click()
+  await page.locator('input').first().fill('オフラインで登録した本')
+  await page.locator('input[type=number]').fill('620')
+  await page.getByRole('button', { name: '登録して読みはじめる' }).click()
+  await expect(page.getByText('『オフラインで登録した本』')).toBeVisible()
 
   await page.reload()
-  await expect(page.getByRole('button', { name: '20 分' })).toHaveAttribute('aria-pressed', 'true')
-
-  const profile = await readProfile<{ preferredDurationMinutes: number }>(page)
-  expect(profile?.preferredDurationMinutes).toBe(20)
+  await page.getByRole('button', { name: '本を選ぶ' }).click()
+  await expect(page.getByRole('button', { name: /オフラインで登録した本/ })).toBeVisible()
   await context.setOffline(false)
 })
 

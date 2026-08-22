@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test'
 
-test('ランディングから Dashboard へ遷移できる', async ({ page }) => {
+test('ランディングからトレーニングへ遷移できる', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('速く理解し')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('読んだ内容を保っていられる力')
 
-  await page.getByRole('link', { name: 'Dashboard を見る' }).click()
-  await expect(page).toHaveURL(/\/dashboard$/)
-  await expect(page.getByRole('heading', { name: /今日の\d+分トレーニングを開始/ })).toBeVisible()
+  await page.getByRole('link', { name: 'トレーニングを始める' }).click()
+  await expect(page).toHaveURL(/\/btr$/)
+  await expect(page.getByRole('heading', { name: '今日はどれくらい取れますか' })).toBeVisible()
 })
 
 test('主要ページが横スクロールを発生させない', async ({ page }) => {
@@ -19,9 +19,9 @@ test('主要ページが横スクロールを発生させない', async ({ page 
   }
 })
 
-test('Dashboard から Progress へナビゲーションできる', async ({ page }) => {
+test('ホームから推移へナビゲーションできる', async ({ page }) => {
   await page.goto('/dashboard')
-  await page.getByRole('link', { name: 'Progress', exact: true }).first().click()
+  await page.getByRole('link', { name: '推移', exact: true }).first().click()
   await expect(page).toHaveURL(/\/progress$/)
-  await expect(page.getByRole('tablist', { name: '表示期間' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '推移' })).toBeVisible()
 })

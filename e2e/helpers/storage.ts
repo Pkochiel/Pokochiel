@@ -1,15 +1,10 @@
 import type { Page } from '@playwright/test'
+import { COLLECTIONS } from '../../src/data/persistence/record-store'
+import { DATABASE_VERSION } from '../../src/data/persistence/indexeddb/migrations'
 
 const DATABASE_NAME = 'speed-reading-lab'
 
-export const COLLECTIONS = [
-  'profile',
-  'sessions',
-  'results',
-  'readingTests',
-  'recallTasks',
-  'plans',
-] as const
+export { COLLECTIONS }
 
 export type Collection = (typeof COLLECTIONS)[number]
 
@@ -42,12 +37,12 @@ function chronologically<T>(rows: T[]): T[] {
  */
 export async function readCollection<T = Row>(page: Page, collection: Collection): Promise<T[]> {
   return page.evaluate(
-    ({ database, store, stores }) =>
+    ({ database, store, stores, version }) =>
       new Promise<T[]>((resolve, reject) => {
         // アプリと同じバージョン・同じ object store で開く。
         // テスト側が先に開いて「空の DB」を作ってしまうと、アプリ側の
         // onupgradeneeded が二度と走らなくなるため。
-        const request = indexedDB.open(database, 1)
+        const request = indexedDB.open(database, version)
         request.onupgradeneeded = () => {
           for (const name of stores) {
             if (!request.result.objectStoreNames.contains(name)) {
@@ -74,7 +69,7 @@ export async function readCollection<T = Row>(page: Page, collection: Collection
           }
         }
       }),
-    { database: DATABASE_NAME, store: collection, stores: [...COLLECTIONS] },
+    { database: DATABASE_NAME, store: collection, stores: [...COLLECTIONS], version: DATABASE_VERSION },
   ).then(chronologically)
 }
 
@@ -104,9 +99,9 @@ export async function waitForRecords<T = Row>(
 /** 保存済みデータを空にする（DB 自体は消さない。開いている接続を止めないため）。 */
 export async function clearStoredData(page: Page): Promise<void> {
   await page.evaluate(
-    ({ database, stores }) =>
+    ({ database, stores, version }) =>
       new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open(database, 1)
+        const request = indexedDB.open(database, version)
         request.onupgradeneeded = () => {
           for (const name of stores) {
             if (!request.result.objectStoreNames.contains(name)) {
@@ -135,7 +130,7 @@ export async function clearStoredData(page: Page): Promise<void> {
           }
         }
       }),
-    { database: DATABASE_NAME, stores: [...COLLECTIONS] },
+    { database: DATABASE_NAME, stores: [...COLLECTIONS], version: DATABASE_VERSION },
   )
 }
 

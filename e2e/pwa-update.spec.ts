@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { waitForServiceWorker } from './helpers/storage'
 
-const DASHBOARD_HEADING = /今日の\d+分トレーニングを開始/
+const DASHBOARD_HEADING = /今日のトレーニング|今日はもう済んでいます/
 
 /**
  * 新しいビルドを配ったときの Service Worker の入れ替わりを確認する。

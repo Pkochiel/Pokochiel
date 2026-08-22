@@ -30,31 +30,42 @@ const SHELL_CACHE = `${CACHE_PREFIX}shell-${BUILD}`
 const ASSET_CACHE = `${CACHE_PREFIX}asset-${BUILD}`
 const CURRENT_CACHES = [SHELL_CACHE, ASSET_CACHE]
 
-const TRAINING_TYPES = [
-  'warmup',
-  'speed_push',
-  'chunk_reading',
-  'meaning_flash',
-  'structure_reading',
-  'prediction_reading',
-  'variable_speed',
-  'regression_control',
-  'comprehension',
-  'immediate_recall',
+/**
+ * BTR の種目。src/core/training/btr/exercises.ts の id を URL の形にしたもの。
+ * 種目を足したらここにも足す（足し忘れるとその種目だけオフラインで開けない）。
+ */
+const BTR_EXERCISES = [
+  'breathing',
+  'saccade',
+  'number-random',
+  'unit-book',
+  'pattern-sheet',
+  'bp-sheet',
+  'speed-check',
+  'kana-pickup',
+  'logical-test',
+  'speed-board',
+  'image-memory',
+  'normal-reading',
+  'paced-reading',
 ]
 
-/** オフラインでも 1 日分のトレーニングを完走できる経路。 */
+/** 1回の長さ。src/core/planner/btr-session.ts の BTR_SESSION_MINUTES。 */
+const SESSION_MINUTES = [90, 45, 30, 15]
+
+/** オフラインでも 1 回ぶんのトレーニングを通せる経路。 */
 const SHELL_ROUTES = [
   '',
   'dashboard',
-  'training',
+  'btr',
   'progress',
   'recall',
   'settings',
   'onboarding',
   'baseline',
   'baseline/read',
-  ...TRAINING_TYPES.map((type) => `training/${type}`),
+  ...BTR_EXERCISES.map((slug) => `btr/${slug}`),
+  ...SESSION_MINUTES.map((minutes) => `btr/session/${minutes}`),
 ].map(route)
 
 const OFFLINE_FALLBACK = route('dashboard')

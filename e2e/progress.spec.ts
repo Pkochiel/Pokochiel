@@ -1,116 +1,102 @@
 import { expect, test, type Page } from '@playwright/test'
-import { readProfile } from './helpers/storage'
 
 const DAYS = ['2026-08-17', '2026-08-18', '2026-08-19']
 
+/**
+ * 記録を仕込む。
+ *
+ * Phase 1 の localStorage に置くと、アプリ起動時の移送でそのまま
+ * IndexedDB へ入る（その経路も一緒に確かめられる）。
+ */
 async function seedHistory(page: Page) {
   await page.addInitScript((days: string[]) => {
-    const cpm = [660, 700, 715]
-    const comprehension = [80, 85, 88]
-    const recall = [75, 75, 100]
     window.localStorage.setItem(
       'srl:v1:profile',
       JSON.stringify({
         id: 'local-user',
         displayName: null,
-        baselineCpm: 590,
-        targetCpm: 715,
+        baselineCpm: 500,
+        targetCpm: null,
+        baselineProfile: null,
+        usedBaselinePassageIds: [],
         preferredDurationMinutes: 30,
         chunkLevel: 2,
+        meaningFlashLevel: 2,
         timezone: 'Asia/Tokyo',
         onboardedAt: '2026-08-13T09:00:00.000Z',
         createdAt: '2026-08-13T09:00:00.000Z',
         updatedAt: '2026-08-19T09:00:00.000Z',
       }),
     )
-    window.localStorage.setItem(
-      'srl:v1:sessions',
-      JSON.stringify(
-        days.map((d, i) => ({
-          id: `s${i}`,
-          userId: 'local-user',
-          startedAt: `${d}T09:00:00.000Z`,
-          completedAt: `${d}T09:30:00.000Z`,
-          durationSeconds: 1800,
-          sessionType: 'daily',
-          localDate: d,
-        })),
-      ),
-    )
-    window.localStorage.setItem(
-      'srl:v1:results',
-      JSON.stringify(
-        days.flatMap((d, i) => [
-          {
-            id: `r${i}a`,
-            userId: 'local-user',
-            sessionId: `s${i}`,
-            trainingType: 'speed_push',
-            passageId: 'gen-003',
-            cpm: cpm[i],
-            comprehensionScore: comprehension[i],
-            immediateRecallScore: null,
-            delayedRecallScore: null,
-            targetCpm: 700,
-            backCount: 0,
-            pauseCount: 0,
-            chunkLevel: null,
-            difficulty: 3,
-            valid: true,
-            createdAt: `${d}T09:10:00.000Z`,
-          },
-          {
-            id: `r${i}b`,
-            userId: 'local-user',
-            sessionId: `s${i}`,
-            trainingType: 'immediate_recall',
-            passageId: 'his-001',
-            cpm: null,
-            comprehensionScore: null,
-            immediateRecallScore: recall[i],
-            delayedRecallScore: null,
-            targetCpm: null,
-            backCount: null,
-            pauseCount: null,
-            chunkLevel: null,
-            difficulty: null,
-            valid: true,
-            createdAt: `${d}T09:25:00.000Z`,
-          },
-        ]),
-      ),
-    )
+
+    const base = {
+      userId: 'local-user',
+      sessionId: 'seed',
+      attempts: [],
+      elapsedMs: 60_000,
+      timeLimitMs: 60_000,
+      accuracy: 92,
+      judgement: 'stay',
+      lowerIsBetter: false,
+      cpm: null,
+      valid: true,
+    }
+
+    const rows = days.flatMap((day, i) => [
+      {
+        ...base,
+        id: `sac-${i}`,
+        exercise: 'saccade',
+        variant: 'horizontal',
+        score: 40 + i * 6,
+        level: 1,
+        localDate: day,
+        createdAt: `${day}T09:00:00.000Z`,
+      },
+      {
+        ...base,
+        id: `read-${i}`,
+        exercise: 'paced_reading',
+        variant: null,
+        score: 6 + i,
+        level: null,
+        cpm: 900 + i * 150,
+        localDate: day,
+        createdAt: `${day}T09:20:00.000Z`,
+      },
+    ])
+    window.localStorage.setItem('srl:v1:btr_results', JSON.stringify(rows))
   }, DAYS)
 }
 
-test('実績がなければ Progress は空の状態を示す', async ({ page }) => {
+test('記録がなければ、まだ何もないことを示す', async ({ page }) => {
   await page.goto('/progress')
-  await expect(page.getByRole('heading', { name: 'Progress' })).toBeVisible()
-  await expect(page.getByText('この期間の実績はまだありません。').first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: '推移' })).toBeVisible()
+  await expect(page.getByText('まだ記録がありません。')).toBeVisible()
 })
 
-test('実績があれば推移とレーダーが表示され、数値でも確認できる', async ({ page }) => {
+test('記録があれば種目ごとに並び、読書の伸びが出る', async ({ page }) => {
   await seedHistory(page)
   await page.goto('/progress')
 
-  await expect(page.getByRole('img', { name: /の推移$/ }).first()).toBeVisible()
-  await expect(page.getByRole('img', { name: '9つのスキルのバランス' })).toBeVisible()
+  // 種目ごとの行。総合点ひとつではなく、種目の名前で並ぶ。
+  await expect(page.getByText('よこサッケイド')).toBeVisible()
+  await expect(page.getByText('倍速読書', { exact: true })).toBeVisible()
 
-  // 色に頼らない代替経路（表）が存在する
-  await page.getByText('数値で見る').first().click()
-  await expect(page.getByRole('table').first()).toBeVisible()
-  await expect(page.getByRole('cell', { name: '2026-08-19' }).first()).toBeVisible()
+  // 級は種目ごとに独立して付く。
+  await expect(page.getByText('5級')).toBeVisible()
 
-  // 期間を切り替えても落ちない
-  await page.getByRole('tab', { name: '90 days' }).click()
-  await expect(page.getByRole('img', { name: /の推移$/ }).first()).toBeVisible()
+  // 読書の伸びは倍速読書の記録だけで測る（1200 / 500 = 2.4 倍）。
+  await expect(page.getByText('読書の伸び')).toBeVisible()
+  await expect(page.getByText('2.4')).toBeVisible()
+
+  // 折れ線は代替テキストから辿れる（色に頼らない）。
+  await expect(page.getByRole('img', { name: 'よこサッケイド の推移' })).toBeVisible()
 })
 
-test('Settings で1日のトレーニング時間を変更できる', async ({ page }) => {
+test('設定では1回の長さを決めない', async ({ page }) => {
+  // その日どれだけ取れるかは日によって違うので、始めるたびに選ぶ。
   await page.goto('/settings')
-  await page.getByRole('button', { name: '20 分' }).click()
-  await expect(page.getByText('保存しました。')).toBeVisible()
-
-  const stored = await readProfile<{ preferredDurationMinutes: number }>(page)
-  expect(stored?.preferredDurationMinutes).toBe(20)
+  await expect(page.getByRole('heading', { name: '設定' })).toBeVisible()
+  await expect(page.getByText('始めるたびに選びます。ここでは決めません。')).toBeVisible()
 })
