@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { NumberRandomBlock } from './number-random-block'
+import { PatternSheetBlock } from './pattern-sheet-block'
 import { SaccadeBlock } from './saccade-block'
 
 /**
@@ -62,7 +63,7 @@ export const BTR_CATALOG: readonly BtrEntry[] = [
     name: '漢数字一行',
     stage: 'field',
     summary: '縦書き80列から対象の漢数字を探す。3ターン',
-    Component: null,
+    Component: PatternSheetBlock,
   },
   {
     slug: 'bp-sheet',
