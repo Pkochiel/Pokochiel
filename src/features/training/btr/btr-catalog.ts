@@ -1,4 +1,7 @@
 import type { ComponentType } from 'react'
+import { BpSheetBlock } from './bp-sheet-block'
+import { BreathingBlock } from './breathing-block'
+import { ImageMemoryBlock } from './image-memory-block'
 import { LogicalTestBlock } from './logical-test-block'
 import { NumberRandomBlock } from './number-random-block'
 import { PatternSheetBlock } from './pattern-sheet-block'
@@ -46,7 +49,7 @@ export const BTR_CATALOG: readonly BtrEntry[] = [
     name: 'カウント呼吸法',
     stage: 'prepare',
     summary: '決まった時間で自分の呼吸を数える。少ないほうがよい',
-    Component: null,
+    Component: BreathingBlock,
   },
   {
     slug: 'saccade',
@@ -74,7 +77,7 @@ export const BTR_CATALOG: readonly BtrEntry[] = [
     name: 'BPシート',
     stage: 'field',
     summary: '動きの中で文字を判別する',
-    Component: null,
+    Component: BpSheetBlock,
   },
   {
     slug: 'unit-book',
@@ -116,7 +119,7 @@ export const BTR_CATALOG: readonly BtrEntry[] = [
     name: 'イメージ記憶',
     stage: 'focus',
     summary: '40語を覚えて思い出す。同じ語で2セット',
-    Component: null,
+    Component: ImageMemoryBlock,
   },
   {
     slug: 'reading',
