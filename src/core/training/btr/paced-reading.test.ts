@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   PACED_READING,
+  READING_MODE_LABELS,
   isValidCharsPerPage,
   measureProgress,
   scorePacedReading,
@@ -25,38 +26,64 @@ describe('isValidCharsPerPage', () => {
 
 describe('scorePacedReading', () => {
   it('ページ数と1ページの文字数から字数を出す', () => {
-    expect(scorePacedReading({ charsPerPage: 600, pages: 20, elapsedMs: 600_000 }).characters).toBe(
+    expect(scorePacedReading({ mode: 'paced', charsPerPage: 600, pages: 20, elapsedMs: 600_000 }).characters).toBe(
       12_000,
     )
   })
 
   it('1分あたりの文字数を出す', () => {
     // 20ページ × 600字 ＝ 12,000字を10分 → 1,200 字/分
-    expect(scorePacedReading({ charsPerPage: 600, pages: 20, elapsedMs: 600_000 }).cpm).toBe(1200)
+    expect(scorePacedReading({ mode: 'paced', charsPerPage: 600, pages: 20, elapsedMs: 600_000 }).cpm).toBe(1200)
   })
 
   it('1分あたりのページ数も出す', () => {
     expect(
-      scorePacedReading({ charsPerPage: 600, pages: 20, elapsedMs: 600_000 }).pagesPerMinute,
+      scorePacedReading({ mode: 'paced', charsPerPage: 600, pages: 20, elapsedMs: 600_000 }).pagesPerMinute,
     ).toBe(2)
   })
 
   it('時間が 0 なら速度を 0 にする', () => {
-    const result = scorePacedReading({ charsPerPage: 600, pages: 20, elapsedMs: 0 })
+    const result = scorePacedReading({ mode: 'paced', charsPerPage: 600, pages: 20, elapsedMs: 0 })
     expect(result.cpm).toBe(0)
     expect(result.valid).toBe(false)
   })
 
   it('ページ数が 0 なら記録として認めない', () => {
-    expect(scorePacedReading({ charsPerPage: 600, pages: 0, elapsedMs: 600_000 }).valid).toBe(false)
+    expect(scorePacedReading({ mode: 'paced', charsPerPage: 600, pages: 0, elapsedMs: 600_000 }).valid).toBe(false)
   })
 
   it('1ページの文字数が桁違いなら記録として認めない', () => {
-    expect(scorePacedReading({ charsPerPage: 6, pages: 20, elapsedMs: 600_000 }).valid).toBe(false)
+    expect(scorePacedReading({ mode: 'paced', charsPerPage: 6, pages: 20, elapsedMs: 600_000 }).valid).toBe(false)
   })
 
   it('妥当な入力なら valid になる', () => {
-    expect(scorePacedReading({ charsPerPage: 600, pages: 20, elapsedMs: 600_000 }).valid).toBe(true)
+    expect(scorePacedReading({ mode: 'paced', charsPerPage: 600, pages: 20, elapsedMs: 600_000 }).valid).toBe(true)
+  })
+})
+
+describe('読み方の区別', () => {
+  it('普通読書と倍速読書を分けて記録する', () => {
+    // ひとつにまとめると、速く読もうとした日の数字とふだんの数字が混ざる。
+    const normal = scorePacedReading({
+      mode: 'normal',
+      charsPerPage: 600,
+      pages: 10,
+      elapsedMs: 600_000,
+    })
+    const paced = scorePacedReading({
+      mode: 'paced',
+      charsPerPage: 600,
+      pages: 20,
+      elapsedMs: 600_000,
+    })
+    expect(normal.mode).toBe('normal')
+    expect(paced.mode).toBe('paced')
+    expect(paced.cpm).toBeGreaterThan(normal.cpm)
+  })
+
+  it('表示名を持つ', () => {
+    expect(READING_MODE_LABELS.normal).toBe('普通読書')
+    expect(READING_MODE_LABELS.paced).toBe('倍速読書')
   })
 })
 

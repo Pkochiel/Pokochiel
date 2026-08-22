@@ -1,14 +1,31 @@
 /**
- * 倍速読書（BTRメソッド 仕上げ）
+ * 読書（BTRメソッド 仕上げ）
  *
  * **自分の本**を読み、読んだページ数と時間を記録する。
  * 用意された教材ではなく実際の本を使うのがこの種目の要点である。
+ *
+ * 読書には2つある。
+ *
+ *   普通読書  いつもの読み方で読む。いまの自分の速さを測る
+ *   倍速読書  意識して速く読む。訓練にあたる
+ *
+ * 2つを分けて記録するのが肝心である。ひとつにまとめると、
+ * 「速く読もうとしたときの数字」と「ふだんの数字」が混ざり、
+ * 伸びているのか、その日がんばっただけなのかが分からなくなる。
  *
  * 本を登録するときに **1ページあたりの文字数** を入れてもらい、
  * ページ数から字数を出す。本が変わったら登録し直す。
  *
  * ここと Baseline 測定だけが CPM を持つ。他の種目では速度を使わない。
  */
+
+/** 読み方。記録は必ずどちらかに分ける。 */
+export type ReadingMode = 'normal' | 'paced'
+
+export const READING_MODE_LABELS: Record<ReadingMode, string> = {
+  normal: '普通読書',
+  paced: '倍速読書',
+}
 
 export const PACED_READING = {
   /** 1ページの文字数として受け付ける範囲。文庫は600前後、単行本は700〜900あたり。 */
@@ -29,6 +46,7 @@ export interface ReadingBook {
 }
 
 export interface PacedReadingInput {
+  readonly mode: ReadingMode
   readonly charsPerPage: number
   /** 読んだページ数 */
   readonly pages: number
@@ -36,6 +54,7 @@ export interface PacedReadingInput {
 }
 
 export interface PacedReadingResult {
+  readonly mode: ReadingMode
   readonly pages: number
   readonly characters: number
   readonly elapsedMs: number
@@ -57,7 +76,7 @@ export function isValidCharsPerPage(value: number): boolean {
 }
 
 export function scorePacedReading(input: PacedReadingInput): PacedReadingResult {
-  const { charsPerPage, pages, elapsedMs } = input
+  const { mode, charsPerPage, pages, elapsedMs } = input
   const minutes = elapsedMs / 60_000
   const characters = Math.max(0, Math.round(pages * charsPerPage))
 
@@ -65,6 +84,7 @@ export function scorePacedReading(input: PacedReadingInput): PacedReadingResult 
   const cpm = minutes <= 0 ? 0 : Math.round(characters / minutes)
 
   return {
+    mode,
     pages,
     characters,
     elapsedMs,
@@ -90,6 +110,8 @@ export interface ReadingProgress {
  * 入会時の何倍になったか。
  *
  * 「1分で1冊」のような数字を出さないため、比較の相手は常に自分の Baseline にする。
+ * 倍速読書の記録だけで測る。普通読書と混ぜると、速く読もうとした日の数字が
+ * ふだんの速さとして残ってしまう。
  */
 export function measureProgress(baselineCpm: number, currentCpm: number): ReadingProgress {
   if (baselineCpm <= 0) {
