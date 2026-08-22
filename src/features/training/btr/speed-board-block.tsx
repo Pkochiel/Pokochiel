@@ -11,6 +11,7 @@ import {
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * スピードボード（BTRメソッド 読書内容への集中）
@@ -20,11 +21,7 @@ import { useCountdown } from './shared/use-countdown'
  * 動いた跡は表示しない。真ん中の印だけを出す。
  */
 
-export interface SpeedBoardBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
-}
+export type SpeedBoardBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
@@ -163,7 +160,9 @@ export function SpeedBoardBlock({ seed, level = 0, onComplete }: SpeedBoardBlock
         { label: '手つかず', value: `${result.unanswered} 問` },
         { label: '正答率', value: `${result.accuracy}%` },
       ]}
-      onNext={() => onComplete({ score: result.correct })}
+      onNext={() =>
+        onComplete({ score: result.correct, accuracy: result.accuracy, timeLimitMs })
+      }
     />
   )
 }

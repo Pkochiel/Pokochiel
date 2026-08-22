@@ -13,6 +13,7 @@ import {
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * 漢数字一行（BTRメソッド 認知視野拡大 / パターンシート）
@@ -24,11 +25,7 @@ import { useCountdown } from './shared/use-countdown'
  * 5刻みで列に番号を振る。
  */
 
-export interface PatternSheetBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
-}
+export type PatternSheetBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
@@ -111,7 +108,14 @@ export function PatternSheetBlock({ seed, onComplete }: PatternSheetBlockProps) 
         { label: '押し間違い', value: `${wrong} 回` },
       ]}
       note="ターンごとの拾えた数と、到達した列を並べて記録します。"
-      onNext={() => onComplete({ score: found })}
+      onNext={() =>
+        onComplete({
+          score: found,
+          attempts: results.map((result) => result.found),
+          timeLimitMs: PATTERN_SHEET.turnMs,
+          accuracy: found + wrong === 0 ? 0 : Math.round((found / (found + wrong)) * 100),
+        })
+      }
     />
   )
 }

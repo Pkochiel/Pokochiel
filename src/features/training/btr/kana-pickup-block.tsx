@@ -10,6 +10,7 @@ import { pickKanaStory, selectKanaQuestions } from '@/data/content/kana-stories'
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrScreen, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * かなひろい（BTRメソッド 読書内容への集中）
@@ -24,11 +25,7 @@ import { useCountdown } from './shared/use-countdown'
  * 読んでいない先を訊けば、測っているのは記憶ではなく運になる。
  */
 
-export interface KanaPickupBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
-}
+export type KanaPickupBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'questions' | 'result'
 
@@ -223,7 +220,14 @@ export function KanaPickupBlock({ seed, onComplete }: KanaPickupBlockProps) {
         },
       ]}
       note="拾い率と内容の正答は、どちらか片方では意味がありません。拾いながら読めているかを見る種目です。"
-      onNext={() => onComplete({ score: scored.found })}
+      onNext={() =>
+        onComplete({
+          score: scored.found,
+          accuracy: scored.foundRatio,
+          elapsedMs: KANA_PICKUP.durationMs,
+          timeLimitMs: KANA_PICKUP.durationMs,
+        })
+      }
     />
   )
 }

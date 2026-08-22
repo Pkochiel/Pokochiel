@@ -12,6 +12,7 @@ import {
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * 数字ランダム（BTRメソッド 認知視野拡大）
@@ -20,11 +21,7 @@ import { useCountdown } from './shared/use-countdown'
  * 4枚のシートを続けて行い、記録は「22・20・18・24」のように各枚の到達数を並べる。
  */
 
-export interface NumberRandomBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
-}
+export type NumberRandomBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
@@ -102,7 +99,9 @@ export function NumberRandomBlock({ seed, level = 0, onComplete }: NumberRandomB
         { label: '押し間違い', value: `${combined.wrong} 回` },
       ]}
       note="4枚それぞれの到達数を並べて記録します。合計より、枚ごとの並びのほうが調子の変化が見えます。"
-      onNext={() => onComplete({ score: combined.reached })}
+      onNext={() =>
+        onComplete({ score: combined.reached, attempts: combined.attempts, timeLimitMs })
+      }
     />
   )
 }

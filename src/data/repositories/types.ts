@@ -58,6 +58,8 @@ export interface BtrResultInput {
   exercise: string
   score: number
   localDate: LocalDate
+  /** サッケイドのたて／よこのような、同じ種目の中の区別。 */
+  variant?: string | null
   attempts?: number[]
   elapsedMs?: number | null
   timeLimitMs?: number | null

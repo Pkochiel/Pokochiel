@@ -13,6 +13,7 @@ import {
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrScreen, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * サッケイド（BTRメソッド 認知視野拡大）
@@ -28,18 +29,7 @@ import { useCountdown } from './shared/use-countdown'
 /** ブロックの長さ。教室のスコア（30秒で57往復など）に合わせる。 */
 const DURATION_MS = 30_000
 
-export interface SaccadeBlockProps {
-  /** その日の向きを決める種。日付を渡す。 */
-  readonly seed: string
-  /** 級（0 始まり）。上がるほど点灯が速くなる。 */
-  readonly level?: number
-  readonly onComplete: (outcome: {
-    axis: SaccadeAxis
-    score: number
-    accuracy: number
-    total: number
-  }) => void
-}
+export type SaccadeBlockProps = BtrBlockProps
 
 /** 級ごとの点灯間隔（ms）。上がるほど短くなる。 */
 const INTERVALS_MS = [700, 600, 500, 420, 360, 300]
@@ -182,10 +172,13 @@ export function SaccadeBlock({ seed, level = 0, onComplete }: SaccadeBlockProps)
       note="教室の紙のシートとは数え方が違うため、点数の絶対値は比べられません。自分の推移だけを見てください。"
       onNext={() =>
         onComplete({
-          axis,
           score: result.hits,
+          // たてとよこを別々に残す。ひとつの推移にまとめると、
+          // その日どちらをやったかで数字が跳ねる。
+          variant: axis,
           accuracy: result.accuracy,
-          total: result.total,
+          elapsedMs: DURATION_MS,
+          timeLimitMs: intervalMs,
         })
       }
     />

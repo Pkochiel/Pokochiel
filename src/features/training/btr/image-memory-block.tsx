@@ -10,6 +10,7 @@ import { pickImageWords, toImagePairs } from '@/data/content/image-words'
 import { Button } from '@/components/ui/button'
 import { BtrIntro, BtrResult, BtrScreen, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * イメージ記憶 / イメージボード（BTRメソッド 読書内容への集中）
@@ -21,11 +22,7 @@ import { useCountdown } from './shared/use-countdown'
  * 画面の並べ方もそれに合わせる。
  */
 
-export interface ImageMemoryBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
-}
+export type ImageMemoryBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'memorize' | 'recall' | 'result'
 
@@ -139,7 +136,14 @@ export function ImageMemoryBlock({ seed, level = 0, onComplete }: ImageMemoryBlo
         },
       ]}
       note={`主スコアは ${IMAGE_MEMORY.sets} セットのうち良いほうです。合計にすると同じ語を二重に数えてしまいます。`}
-      onNext={() => onComplete({ score: result.score })}
+      onNext={() =>
+        onComplete({
+          score: result.score,
+          attempts: result.attempts,
+          timeLimitMs,
+          accuracy: Math.round((result.score / result.total) * 100),
+        })
+      }
     />
   )
 }

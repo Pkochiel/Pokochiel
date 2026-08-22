@@ -11,6 +11,7 @@ import {
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * ロジカルテスト（BTRメソッド 読書内容への集中）
@@ -22,11 +23,7 @@ import { useCountdown } from './shared/use-countdown'
 
 const ANSWERS: readonly LogicalAnswer[] = ['true', 'false', 'unknown']
 
-export interface LogicalTestBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
-}
+export type LogicalTestBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
@@ -160,7 +157,9 @@ export function LogicalTestBlock({ seed, level = 2, onComplete }: LogicalTestBlo
         { label: '正答率', value: `${result.accuracy}%` },
       ]}
       note="正答率の分母は全問です。時間内にどれだけ処理できたかを見る種目なので、解いた分だけで割りません。"
-      onNext={() => onComplete({ score: result.correct })}
+      onNext={() =>
+        onComplete({ score: result.correct, accuracy: result.accuracy, timeLimitMs })
+      }
     />
   )
 }

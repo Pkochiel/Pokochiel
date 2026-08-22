@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * ユニットブック（BTRメソッド 認知視野拡大）
@@ -18,11 +19,7 @@ import { useCountdown } from './shared/use-countdown'
  * 文の頭だけ見て決めると外れるところがこの種目の要点である。
  */
 
-export interface UnitBookBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
-}
+export type UnitBookBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
@@ -163,7 +160,9 @@ export function UnitBookBlock({ seed, level = 0, onComplete }: UnitBookBlockProp
           ? '時間内に解けた分までを数えます。正答率の分母は全問です。'
           : undefined
       }
-      onNext={() => onComplete({ score: result.correct })}
+      onNext={() =>
+        onComplete({ score: result.correct, accuracy: result.accuracy, timeLimitMs })
+      }
     />
   )
 }

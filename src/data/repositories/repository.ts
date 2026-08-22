@@ -230,6 +230,7 @@ export class RecordStoreRepository implements TrainingRepository {
       userId: LOCAL_USER_ID,
       sessionId: input.sessionId,
       exercise: input.exercise,
+      variant: input.variant ?? null,
       score: input.score,
       attempts: input.attempts ?? [],
       elapsedMs: input.elapsedMs ?? null,

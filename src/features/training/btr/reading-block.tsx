@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrScreen, BtrTimerBar } from './shared/btr-shell'
 import { formatRemaining, useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * 普通読書 / 倍速読書（BTRメソッド 仕上げ）
@@ -34,15 +35,17 @@ import { formatRemaining, useCountdown } from './shared/use-countdown'
 
 const MODES: readonly ReadingMode[] = ['normal', 'paced']
 
-export interface ReadingBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
+export type ReadingBlockProps = BtrBlockProps & {
+  /**
+   * 読み方を決め打ちする。1回の組み立ての中では、普通読書と倍速読書は
+   * 別々のブロックとして並ぶので、その場で選ばせる必要がない。
+   */
+  readonly mode?: ReadingMode
 }
 
 type Phase = 'intro' | 'book' | 'mode' | 'running' | 'pages' | 'result'
 
-export function ReadingBlock({ onComplete }: ReadingBlockProps) {
+export function ReadingBlock({ mode: fixedMode, onComplete }: ReadingBlockProps) {
   const [phase, setPhase] = useState<Phase>('intro')
   /**
    * 本の控えは localStorage にある。
@@ -52,7 +55,7 @@ export function ReadingBlock({ onComplete }: ReadingBlockProps) {
    */
   const [shelf, setShelf] = useState<ReadingShelf>({ books: [], currentId: null })
   const [book, setBook] = useState<ReadingBook | null>(null)
-  const [mode, setMode] = useState<ReadingMode>('paced')
+  const [mode, setMode] = useState<ReadingMode>(fixedMode ?? 'paced')
   const [pages, setPages] = useState('')
   const [elapsedMs, setElapsedMs] = useState(0)
   const [finished, setFinished] = useState(false)
@@ -61,7 +64,7 @@ export function ReadingBlock({ onComplete }: ReadingBlockProps) {
     return (
       <BtrIntro
         stage="読書"
-        title="普通読書 / 倍速読書"
+        title={fixedMode ? READING_MODE_LABELS[fixedMode] : '普通読書 / 倍速読書'}
         startLabel="本を選ぶ"
         onStart={() => {
           setShelf(getReadingBookShelf().load())
@@ -88,7 +91,7 @@ export function ReadingBlock({ onComplete }: ReadingBlockProps) {
         shelf={shelf}
         onReady={(chosen) => {
           setBook(chosen)
-          setPhase('mode')
+          setPhase(fixedMode ? 'running' : 'mode')
         }}
         onShelfChange={setShelf}
       />
@@ -214,7 +217,16 @@ export function ReadingBlock({ onComplete }: ReadingBlockProps) {
                 : 'この数字がいまのふだんの速さです。倍速読書の伸びは、ここを基準に見ます。'
           }
           nextLabel={result.valid ? '次へ' : '記録せずに次へ'}
-          onNext={() => onComplete({ score: result.valid ? result.cpm : 0 })}
+          onNext={() =>
+            onComplete({
+              // 記録するのはページ数。分速はそこから出した数字なので別に持つ。
+              score: result.pages,
+              variant: mode,
+              cpm: result.cpm,
+              elapsedMs: result.elapsedMs,
+              valid: result.valid,
+            })
+          }
         />
         {!finished ? (
           <div className="mx-auto -mt-8 max-w-3xl px-5 pb-12 sm:px-8">

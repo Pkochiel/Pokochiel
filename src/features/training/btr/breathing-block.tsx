@@ -8,6 +8,7 @@ import {
 } from '@/core/training/btr/breathing'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * カウント呼吸法（BTRメソッド 準備）
@@ -19,11 +20,7 @@ import { useCountdown } from './shared/use-countdown'
  * 「多いほど良い」と受け取られると、速く呼吸して数字を上げる人が出る。
  */
 
-export interface BreathingBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
-}
+export type BreathingBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
@@ -116,7 +113,15 @@ export function BreathingBlock({ onComplete }: BreathingBlockProps) {
       lines={[{ label: '1分あたり', value: `${result.perMinute} 回` }]}
       note={BREATHING_STATE_MESSAGES[result.state]}
       nextLabel="トレーニングへ"
-      onNext={() => onComplete({ score: result.breaths })}
+      onNext={() =>
+        onComplete({
+          score: result.breaths,
+          elapsedMs: result.elapsedMs,
+          timeLimitMs: BREATHING.durationMs,
+          // この種目だけ少ないほうがよい。記録に残さないと推移の向きを決められない。
+          lowerIsBetter: true,
+        })
+      }
     />
   )
 }

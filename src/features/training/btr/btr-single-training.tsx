@@ -1,42 +1,67 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { createElement, useEffect, useState } from 'react'
 import { ButtonLink } from '@/components/ui/button'
+import { btrExercise, type BtrExercise } from '@/core/training/btr/exercises'
 import { formatLocalDate } from '@/core/util/date'
-import { resolveTimezone } from '@/data/repositories'
+import type { LocalDate } from '@/core/types'
+import { getRepository, resolveTimezone } from '@/data/repositories'
 import { findBtrEntry } from './btr-catalog'
 import { BtrScreen } from './shared/btr-shell'
+import type { BtrOutcome } from './shared/btr-block'
+import { saveBtrResult } from './use-btr-session'
 
 /**
  * 1種目だけを開いて試す画面。
  *
- * セッション構成の置き換えはまだなので、結果は保存しない。
- * 保存はセッションの仕組みごと差し替えるとき（Phase 3-F）にまとめて入れる。
+ * 通しのセッションと同じように記録を残す。1種目だけ触った日も、
+ * 種目ごとの推移には同じ1点として乗るのが自然である。
  */
 
 export interface BtrSingleTrainingProps {
   readonly slug: string
 }
 
+interface Ready {
+  readonly today: LocalDate
+  readonly level: number | null
+}
+
 export function BtrSingleTraining({ slug }: BtrSingleTrainingProps) {
   const entry = findBtrEntry(slug)
+  const exercise = entry?.exercise ?? null
+  const [ready, setReady] = useState<Ready | null>(null)
+  const [round, setRound] = useState(0)
   const [done, setDone] = useState(false)
 
-  // その日の課題を決める種。同じ日なら同じ課題が出る。
-  const seed = useMemo(() => formatLocalDate(new Date(), resolveTimezone()), [])
+  useEffect(() => {
+    if (exercise === null) return
+    let cancelled = false
 
-  if (!entry) return null
+    async function load(id: NonNullable<typeof exercise>) {
+      const today = formatLocalDate(new Date(), resolveTimezone())
+      // その種目のいまの級。記録がなければ最初の段から。
+      const history = await getRepository().listBtrResults({ exercise: id })
+      const last = history[history.length - 1]
+      if (cancelled) return
+      setReady({
+        today,
+        level: btrExercise(id).leveled ? (last?.level ?? 0) : null,
+      })
+    }
 
-  if (entry.Component === null) {
+    void load(exercise)
+    return () => {
+      cancelled = true
+    }
+  }, [exercise])
+
+  if (!entry || exercise === null) return null
+
+  if (ready === null) {
     return (
       <BtrScreen>
-        <h1 className="text-xl font-semibold">{entry.name}</h1>
-        <p className="mt-3 text-sm leading-relaxed text-fg-muted">
-          この種目はまだ画面ができていません。
-        </p>
-        <ButtonLink href="/btr" variant="secondary" className="mt-8 w-full sm:w-auto">
-          一覧へ戻る
-        </ButtonLink>
+        <p className="text-sm text-fg-muted">用意しています…</p>
       </BtrScreen>
     )
   }
@@ -46,8 +71,7 @@ export function BtrSingleTraining({ slug }: BtrSingleTrainingProps) {
       <BtrScreen>
         <h1 className="text-xl font-semibold">{entry.name} を終えました</h1>
         <p className="mt-3 text-sm leading-relaxed text-fg-muted">
-          いまは記録を保存していません。
-          セッションの仕組みごと BTR に差し替えるときに、記録と推移を入れます。
+          記録を残しました。1回ごとの上下より、何週かの向きを見てください。
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <ButtonLink href="/btr" className="w-full sm:w-auto">
@@ -55,7 +79,10 @@ export function BtrSingleTraining({ slug }: BtrSingleTrainingProps) {
           </ButtonLink>
           <button
             type="button"
-            onClick={() => setDone(false)}
+            onClick={() => {
+              setRound((current) => current + 1)
+              setDone(false)
+            }}
             className="text-sm text-fg-muted hover:text-fg"
           >
             もう一度やる
@@ -65,6 +92,42 @@ export function BtrSingleTraining({ slug }: BtrSingleTrainingProps) {
     )
   }
 
-  const Block = entry.Component
-  return <Block key={String(done)} seed={seed} onComplete={() => setDone(true)} />
+  const complete = (outcome: BtrOutcome) => {
+    void record(exercise, ready, outcome)
+    setDone(true)
+  }
+
+  // 一覧から引いた画面を出す。createElement なのは、種目ごとに
+  // if を13本並べたくないため。引いているだけで、ここで部品は作っていない。
+  return createElement(entry.Component, {
+    key: round,
+    seed: ready.today,
+    ...(ready.level !== null ? { level: ready.level } : {}),
+    onComplete: complete,
+  })
+}
+
+/**
+ * 1種目だけの回も、通しの回と同じ形で残す。
+ *
+ * セッションはその場で作る。1種目だけ触った日も「いつやったか」が要るので、
+ * 記録だけを宙に浮かせない。
+ */
+async function record(
+  exercise: BtrExercise,
+  ready: Ready,
+  outcome: BtrOutcome,
+): Promise<void> {
+  const session = await getRepository().createSession({
+    sessionType: 'btr',
+    startedAt: new Date().toISOString(),
+    localDate: ready.today,
+  })
+  await saveBtrResult({
+    sessionId: session.id,
+    localDate: ready.today,
+    exercise,
+    level: ready.level,
+    ...outcome,
+  })
 }

@@ -6,6 +6,7 @@ import { scoreSearch } from '@/core/training/btr/visual-search'
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * スピードチェック（BTRメソッド 読書内容への集中）
@@ -15,11 +16,7 @@ import { useCountdown } from './shared/use-countdown'
  * 字形ではなく組み合わせとして掴む必要がある。
  */
 
-export interface SpeedCheckBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
-}
+export type SpeedCheckBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
@@ -137,7 +134,14 @@ export function SpeedCheckBlock({ seed, onComplete }: SpeedCheckBlockProps) {
         { label: '押し間違い', value: `${result.wrong} 回` },
         { label: '正確さ', value: `${result.precision}%` },
       ]}
-      onNext={() => onComplete({ score: result.found })}
+      onNext={() =>
+        onComplete({
+          score: result.found,
+          accuracy: result.precision,
+          elapsedMs: SPEED_CHECK.turnMs,
+          timeLimitMs: SPEED_CHECK.turnMs,
+        })
+      }
     />
   )
 }

@@ -153,6 +153,7 @@ export const btrResultSchema = z.object({
   userId: z.string(),
   sessionId: z.string(),
   exercise: z.string(),
+  variant: z.string().nullable().default(null),
   score: z.number(),
   attempts: z.array(z.number()).default([]),
   elapsedMs: z.number().nonnegative().nullable().default(null),

@@ -200,6 +200,7 @@ describe('BTR の記録の持ち出し', () => {
     userId: 'local-user',
     sessionId: 's1',
     exercise: 'number_random',
+    variant: null,
     score: 24,
     attempts: [22, 20, 18, 24],
     elapsedMs: 240_000,
@@ -236,6 +237,20 @@ describe('BTR の記録の持ち出し', () => {
     )
     const [row] = (await restored.list('btrResults')) as { attempts: number[] }[]
     expect(row?.attempts).toEqual([22, 20, 18, 24])
+  })
+
+  it('variant を持たない古い記録も取り込める', async () => {
+    // variant はあとから足した列。持たないファイルが落ちないこと。
+    const { variant: _variant, ...withoutVariant } = btrResult
+    const store = new MemoryRecordStore()
+    await store.put('btrResults', withoutVariant)
+    const restored = new MemoryRecordStore()
+    const result = await importSnapshot(
+      restored,
+      await exportSnapshot(store, { exportedAt: '2026-08-22T09:00:00.000Z', appVersion: '0.1.0' }),
+    )
+    expect(result.status).toBe('ok')
+    expect((await restored.list('btrResults'))[0]).toMatchObject({ variant: null })
   })
 
   it('BTR より前のバックアップも取り込める', async () => {

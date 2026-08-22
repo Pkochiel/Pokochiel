@@ -5,6 +5,7 @@ import { BP_SHEET, buildBpSheet, scoreBpSheet } from '@/core/training/btr/bp-she
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import type { BtrBlockProps } from './shared/btr-block'
 
 /**
  * BPシート（BTRメソッド 認知視野拡大）
@@ -16,11 +17,7 @@ import { useCountdown } from './shared/use-countdown'
  * 「戻って探し直す」ができないぶん、視野の広さがそのまま出る。
  */
 
-export interface BpSheetBlockProps {
-  readonly seed: string
-  readonly level?: number
-  readonly onComplete: (outcome: { score: number }) => void
-}
+export type BpSheetBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
@@ -138,7 +135,14 @@ export function BpSheetBlock({ seed, level = 0, onComplete }: BpSheetBlockProps)
         { label: '正確さ', value: `${result.precision}%` },
       ]}
       note="消える前に拾えたものだけを数えます。"
-      onNext={() => onComplete({ score: result.found })}
+      onNext={() =>
+        onComplete({
+          score: result.found,
+          accuracy: result.precision,
+          elapsedMs: sheet.durationMs,
+          timeLimitMs: sheet.durationMs,
+        })
+      }
     />
   )
 }

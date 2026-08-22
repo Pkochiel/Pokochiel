@@ -113,6 +113,14 @@ export interface BtrResult {
   sessionId: string
   /** 種目。core/training/btr/exercises.ts の BtrExercise。 */
   exercise: string
+  /**
+   * 同じ種目の中の区別。持たない種目は null。
+   *
+   * サッケイドのたて／よこがこれにあたる。受講記録では
+   * 「たてサッケイド 57 / よこサッケイド 77」と別々に並ぶ。
+   * ひとつの推移にまとめると、その日どちらをやったかで数字が跳ねる。
+   */
+  variant: string | null
   /** その種目の主スコア（到達数・正答数・往復数など） */
   score: number
   /** 複数試行する種目の各試行スコア（数字ランダムの4枚など）。単発なら空。 */
