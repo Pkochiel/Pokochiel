@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { ButtonLink } from '@/components/ui/button'
 import { BTR_SESSION_MINUTES } from '@/core/planner/btr-session'
 import { BTR_CATALOG, BTR_STAGE_LABELS, type BtrStage } from './btr-catalog'
 
@@ -22,7 +21,7 @@ const DURATION_NOTES: Record<number, string> = {
 
 export function BtrCatalogView() {
   return (
-    <main className="mx-auto min-h-dvh max-w-2xl px-5 py-12 sm:px-8">
+    <div className="mx-auto max-w-2xl">
       <p className="text-xs font-semibold tracking-[0.18em] text-brand uppercase">BTR メソッド</p>
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">今日はどれくらい取れますか</h1>
       <p className="mt-4 text-sm leading-relaxed text-fg-muted">
@@ -77,9 +76,6 @@ export function BtrCatalogView() {
         )
       })}
 
-      <ButtonLink href="/dashboard" variant="secondary" className="mt-10 w-full sm:w-auto">
-        Dashboard へ
-      </ButtonLink>
-    </main>
+    </div>
   )
 }

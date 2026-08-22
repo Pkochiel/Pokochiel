@@ -1,168 +1,119 @@
 'use client'
 
+import { BTR_SESSION_MINUTES } from '@/core/planner/btr-session'
+import { btrExercise } from '@/core/training/btr/exercises'
+import { PACED_READING } from '@/core/training/btr/paced-reading'
+import type { BtrExercise } from '@/core/training/btr/exercises'
 import { ButtonLink } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
-import { SKILL_LABELS, type SkillId, type SkillProfile, type SkillState } from '@/core/types'
-import { rankSkillsByNeed } from '@/core/metrics/skill-profile'
-import { cn } from '@/lib/cn'
-import { useDailyPlan } from '@/features/training/use-daily-plan'
-import { StatsGrid, type StatsGridValues } from './stats-grid'
-import { TodayCard } from './today-card'
+import { ProgressBar } from '@/components/ui/progress-bar'
 import { useDashboardData } from './use-dashboard-data'
 
-const EMPTY_STATS: StatsGridValues = {
-  currentCpm: null,
-  comprehension: null,
-  immediateRecall: null,
-  nextDayRecall: null,
-  streakDays: 0,
-  ers: null,
-}
-
-const STATE_LABELS: Record<SkillState, string> = {
-  unmeasured: '未測定',
-  weak: '弱い',
-  normal: '標準',
-  strong: '強い',
-}
-
-const STATE_CLASSES: Record<SkillState, string> = {
-  unmeasured: 'bg-surface-muted text-fg-subtle',
-  weak: 'bg-accent-soft text-accent',
-  normal: 'bg-surface-muted text-fg-muted',
-  strong: 'bg-brand-soft text-brand',
-}
-
-/** 主要指標としての Skill Profile。弱い順に並べ、まず何を鍛えるかを見せる。 */
-function SkillSummary({ profile }: { profile: SkillProfile }) {
-  const ranked = rankSkillsByNeed(profile)
-  const measured = ranked.filter((m) => m.state !== 'unmeasured').length
-
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
-      <ul className="space-y-2">
-        {ranked.map((measurement) => (
-          <li key={measurement.id} className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-fg-muted">{SKILL_LABELS[measurement.id as SkillId]}</span>
-            <span className="flex items-center gap-2">
-              <span
-                className={cn(
-                  'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                  STATE_CLASSES[measurement.state],
-                )}
-              >
-                {STATE_LABELS[measurement.state]}
-              </span>
-              <span className="tabular w-8 text-right font-medium">
-                {measurement.score ?? '—'}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-4 text-xs text-fg-subtle">
-        {measured} / {ranked.length} を測定済み。弱い順に並べています。未測定は弱点とは区別します。
-      </p>
-    </div>
-  )
-}
+/**
+ * 開いたときに見えるもの。
+ *
+ * 「今日やったか」「続いているか」「入会時の何倍か」の3つに絞る。
+ * 種目ごとの数字は推移の画面で見るものなので、ここには並べない。
+ * 入口に全部を出すと、いちばん大事な「今日やる」が埋もれる。
+ */
 
 export function DashboardView() {
-  const { loading, profile, stats, skillProfile, dueRecallTasks } = useDashboardData()
-  const { plan } = useDailyPlan()
+  const { loading, profile, today, streakDays, latest, reading, dueRecallTasks } =
+    useDashboardData()
 
-  const totalMinutes = profile?.preferredDurationMinutes ?? 30
-  const onboarded = profile?.onboardedAt != null && profile.baselineCpm != null
-  const notes = plan?.generatedReason?.notes ?? []
+  const doneToday = latest !== null && latest.date === today
+  const onboarded = profile?.baselineCpm != null
 
   return (
     <div className="space-y-6">
       {dueRecallTasks.length > 0 ? (
         <Card className="border-accent bg-accent-soft">
           <CardHeader
-            title="昨日読んだ文章の Recall があります"
-            description="本文は表示しません。覚えている内容を書き出してください。所要 3 分程度。"
+            title="昨日読んだ文章の想起があります"
+            description="本文は出しません。覚えている内容を書き出してください。3分ほど。"
           />
           <ButtonLink href="/recall" variant="accent">
-            Recall を始める
+            想起を始める
           </ButtonLink>
-        </Card>
-      ) : null}
-
-      <TodayCard totalMinutes={totalMinutes} blocks={plan?.blocks ?? []} />
-
-      {notes.length > 0 ? (
-        <Card>
-          <CardHeader title="今日の構成の理由" />
-          <ul className="space-y-2 text-sm leading-relaxed text-fg-muted">
-            {notes.map((note) => (
-              <li key={note} className="flex gap-2">
-                <span aria-hidden className="text-brand">
-                  ・
-                </span>
-                <span>{note}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
-
-      {skillProfile ? (
-        <section>
-          <h2 className="mb-3 text-sm font-semibold tracking-wide text-fg-muted uppercase">
-            Skill Profile
-          </h2>
-          <SkillSummary profile={skillProfile} />
-        </section>
-      ) : null}
-
-      <section>
-        <h2 className="mb-3 text-sm font-semibold tracking-wide text-fg-muted uppercase">
-          Current Stats
-        </h2>
-        <StatsGrid stats={stats ?? EMPTY_STATS} />
-        {!loading && stats && stats.sampleCounts.cpm > 0 ? (
-          <p className="mt-3 text-xs text-fg-subtle">
-            直近 {stats.sampleCounts.cpm} 件の実績から算出しています。ERS
-            は速度・理解・記憶をまとめた参考値です。
-          </p>
-        ) : null}
-      </section>
-
-      {!loading && !onboarded ? (
-        <Card>
-          <CardHeader
-            title="Baseline Test が未実施です"
-            description="最初に現在の読書速度・理解度・想起力を測定します。所要 10 分程度。"
-          />
-          <ButtonLink href="/baseline">Baseline Test を受ける</ButtonLink>
-        </Card>
-      ) : null}
-
-      {onboarded && profile?.targetCpm ? (
-        <Card>
-          <CardHeader title="今日の目標速度" description="理解度に応じて自動で調整されます。" />
-          <p className="tabular text-2xl font-semibold text-brand">
-            {profile.targetCpm}
-            <span className="ml-1 text-xs font-normal text-fg-muted">字/分</span>
-          </p>
         </Card>
       ) : null}
 
       <Card>
         <CardHeader
-          title="Progress"
-          description="7 / 30 / 90 日の推移と、9つのスキルのバランス。"
-          action={
-            <ButtonLink href="/progress" variant="secondary" size="sm">
-              開く
-            </ButtonLink>
+          title={doneToday ? '今日はもう済んでいます' : '今日のトレーニング'}
+          description={
+            doneToday
+              ? 'もう一度やっても構いません。記録はどちらも残ります。'
+              : `${BTR_SESSION_MINUTES.join(' / ')} 分から選べます。`
           }
         />
-        <p className="text-sm text-fg-muted">
-          トレーニングを実施すると、読書速度・理解度・想起の推移がここに蓄積されます。
-        </p>
+        <ButtonLink href="/btr" variant={doneToday ? 'secondary' : 'primary'}>
+          {doneToday ? 'もう一度やる' : 'はじめる'}
+        </ButtonLink>
+
+        {streakDays > 0 ? (
+          <p className="mt-4 text-sm text-fg-muted">
+            <span className="tabular font-medium text-fg">{streakDays}</span> 日続いています。
+          </p>
+        ) : null}
       </Card>
+
+      {reading?.progress ? (
+        <Card>
+          <CardHeader
+            title="読書の伸び"
+            description={`入会時の ${PACED_READING.targetMultiplier} 倍が目標。倍速読書の記録だけで測ります。`}
+            action={
+              <ButtonLink href="/progress" variant="secondary" size="sm">
+                推移を見る
+              </ButtonLink>
+            }
+          />
+          <div className="flex items-baseline gap-2">
+            <span className="tabular text-4xl font-semibold">{reading.progress.multiplier}</span>
+            <span className="text-sm text-fg-muted">倍</span>
+          </div>
+          <ProgressBar value={reading.progress.towardTarget} className="mt-4" />
+        </Card>
+      ) : null}
+
+      {latest ? (
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-fg-muted">
+            直近の記録（{latest.date}）
+          </h2>
+          <dl className="divide-y divide-border rounded-2xl border border-border bg-surface">
+            {latest.records.map((record, index) => (
+              <div
+                key={`${record.exercise}-${record.variant ?? ''}-${index}`}
+                className="flex items-center justify-between px-4 py-3"
+              >
+                <dt className="text-sm text-fg-muted">{nameOf(record.exercise)}</dt>
+                <dd className="tabular text-sm font-medium">{record.score}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ) : null}
+
+      {!loading && !onboarded ? (
+        <Card>
+          <CardHeader
+            title="入会時の速度がまだありません"
+            description="はじめに1回だけ測ります。ここが「3倍」の分母になります。10分ほど。"
+          />
+          <ButtonLink href="/baseline">測る</ButtonLink>
+        </Card>
+      ) : null}
     </div>
   )
+}
+
+/** 一覧にない種目（消した種目の記録）は id のまま出す。落とさない。 */
+function nameOf(exercise: string): string {
+  try {
+    return btrExercise(exercise as BtrExercise).name
+  } catch {
+    return exercise
+  }
 }

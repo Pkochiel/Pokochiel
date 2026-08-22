@@ -65,7 +65,7 @@ test('HTML をキャッシュするとき、その HTML が参照する JS / CSS
 
   // 取り込んだ資産だけでトレーニング画面まで開ける
   await context.setOffline(true)
-  await page.goto('/training/chunk_reading')
-  await expect(page.getByText('Chunk Reading').first()).toBeVisible()
+  await page.goto('/btr/saccade')
+  await expect(page.getByRole('button', { name: 'はじめる' })).toBeVisible()
   await context.setOffline(false)
 })

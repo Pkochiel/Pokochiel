@@ -106,7 +106,7 @@ export function BaselineResult({
           Dashboard へ
         </ButtonLink>
         <Link
-          href="/training"
+          href="/btr"
           className="inline-flex h-14 items-center justify-center rounded-xl px-7 text-sm text-fg-muted hover:text-fg"
         >
           今日のトレーニングを始める

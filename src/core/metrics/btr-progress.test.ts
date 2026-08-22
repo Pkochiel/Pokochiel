@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { toLocalDate } from '../types'
 import {
+  latestSession,
   summarizeBtrProgress,
   summarizeReadingSpeed,
+  trainingStreak,
   trendDirection,
   type BtrRecordLike,
 } from './btr-progress'
@@ -241,5 +243,59 @@ describe('summarizeReadingSpeed', () => {
     const summary = summarizeReadingSpeed(series('logical_test', [20]), 400)
     expect(summary.paced).toEqual([])
     expect(summary.normal).toEqual([])
+  })
+})
+
+describe('trainingStreak', () => {
+  const on = (dates: readonly string[]): BtrRecordLike[] =>
+    dates.map((date) => record({ exercise: 'saccade', score: 40, localDate: d(date) }))
+
+  it('記録がなければ0', () => {
+    expect(trainingStreak([], d('2026-08-22'))).toBe(0)
+  })
+
+  it('今日から続いた日数を数える', () => {
+    expect(trainingStreak(on(['2026-08-20', '2026-08-21', '2026-08-22']), d('2026-08-22'))).toBe(3)
+  })
+
+  it('今日まだやっていなくても切らさない', () => {
+    // 夜にやる人が朝に開いたとき、続いていたものが切れたように見えないこと。
+    expect(trainingStreak(on(['2026-08-20', '2026-08-21']), d('2026-08-22'))).toBe(2)
+  })
+
+  it('2日空いたら切れる', () => {
+    expect(trainingStreak(on(['2026-08-19', '2026-08-20']), d('2026-08-22'))).toBe(0)
+  })
+
+  it('同じ日に何度やっても1日と数える', () => {
+    expect(trainingStreak(on(['2026-08-22', '2026-08-22', '2026-08-22']), d('2026-08-22'))).toBe(1)
+  })
+
+  it('古い連続は数えない', () => {
+    // 間が空いていれば、そこで止める。
+    expect(
+      trainingStreak(on(['2026-08-01', '2026-08-02', '2026-08-21', '2026-08-22']), d('2026-08-22')),
+    ).toBe(2)
+  })
+
+  it('月をまたいでも数えられる', () => {
+    expect(trainingStreak(on(['2026-07-31', '2026-08-01']), d('2026-08-01'))).toBe(2)
+  })
+})
+
+describe('latestSession', () => {
+  it('記録がなければ null', () => {
+    expect(latestSession([])).toBeNull()
+  })
+
+  it('いちばん新しい日の記録をまとめて返す', () => {
+    const rows = [
+      record({ exercise: 'saccade', score: 40, localDate: d('2026-08-21') }),
+      record({ exercise: 'saccade', score: 44, localDate: d('2026-08-22') }),
+      record({ exercise: 'logical_test', score: 22, localDate: d('2026-08-22') }),
+    ]
+    const session = latestSession(rows)
+    expect(session?.date).toBe('2026-08-22')
+    expect(session?.records).toHaveLength(2)
   })
 })

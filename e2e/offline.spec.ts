@@ -89,8 +89,8 @@ test('オフラインのままトレーニング画面まで開ける', async ({
   await waitForServiceWorker(page)
 
   await context.setOffline(true)
-  await page.goto('/training/chunk_reading')
-  await expect(page.getByText('Chunk Reading').first()).toBeVisible()
+  await page.goto('/btr/saccade')
+  await expect(page.getByRole('button', { name: 'はじめる' })).toBeVisible()
 
   await page.goto('/progress')
   await expect(page.getByRole('tablist', { name: '表示期間' })).toBeVisible()

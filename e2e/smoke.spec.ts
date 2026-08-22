@@ -10,7 +10,7 @@ test('ランディングから Dashboard へ遷移できる', async ({ page }) =
 })
 
 test('主要ページが横スクロールを発生させない', async ({ page }) => {
-  for (const path of ['/', '/dashboard', '/progress', '/training', '/baseline']) {
+  for (const path of ['/', '/dashboard', '/progress', '/btr', '/baseline']) {
     await page.goto(path)
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

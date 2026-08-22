@@ -210,3 +210,50 @@ export function summarizeReadingSpeed(
         : measureProgress(baselineCpm, latestPacedCpm),
   }
 }
+
+/**
+ * 続けている日数。
+ *
+ * 今日まだやっていない日を切らしたことにしない。夜にやる人が朝に開いたときに
+ * 0 と出ると、続いていたものが切れたように見える。今日か昨日に記録があれば
+ * そこから数えはじめる。
+ */
+export function trainingStreak(
+  results: readonly BtrRecordLike[],
+  today: LocalDate,
+): number {
+  const days = new Set(results.map((result) => result.localDate as string))
+  if (days.size === 0) return 0
+
+  const start = new Date(`${today}T00:00:00Z`)
+  if (Number.isNaN(start.getTime())) return 0
+
+  const at = (offset: number): string => {
+    const date = new Date(start)
+    date.setUTCDate(date.getUTCDate() - offset)
+    return date.toISOString().slice(0, 10)
+  }
+
+  // 今日やっていなければ昨日から数える。
+  let offset = days.has(at(0)) ? 0 : 1
+  if (!days.has(at(offset))) return 0
+
+  let streak = 0
+  while (days.has(at(offset))) {
+    streak += 1
+    offset += 1
+  }
+  return streak
+}
+
+/** 直近の1回ぶんの記録（同じ日の同じセッション）。 */
+export function latestSession(
+  results: readonly BtrRecordLike[],
+): { date: LocalDate; records: readonly BtrRecordLike[] } | null {
+  const last = results[results.length - 1]
+  if (last === undefined) return null
+  return {
+    date: last.localDate,
+    records: results.filter((result) => result.localDate === last.localDate),
+  }
+}

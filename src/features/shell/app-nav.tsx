@@ -5,10 +5,10 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/cn'
 
 const ITEMS = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/training', label: 'Training' },
-  { href: '/progress', label: 'Progress' },
-  { href: '/settings', label: 'Settings' },
+  { href: '/dashboard', label: 'ホーム' },
+  { href: '/btr', label: 'トレーニング' },
+  { href: '/progress', label: '推移' },
+  { href: '/settings', label: '設定' },
 ] as const
 
 function isActive(pathname: string, href: string): boolean {
