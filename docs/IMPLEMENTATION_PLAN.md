@@ -104,7 +104,25 @@ Auth と Supabase は入れない。クラウド同期が無い状態で全機�
 - **完了条件**：ネットワークを切った状態で起動・保存・翌日 Recall ができる ✅
   （`e2e/offline.spec.ts`）
 
-## Phase 3 — Supabase Sync（任意機能）
+## Phase 3 — BTRメソッドへの移行 ✅ 完了
+
+訓練の中身を総取り替えした。設計と、確認できたこと・推測でしかないことの区別は
+[BTR_METHOD.md](BTR_METHOD.md) にある。
+
+| 段 | 内容 |
+|---|---|
+| 3-A | 設計文書（BTR_METHOD.md） |
+| 3-B | 認知視野拡大：サッケイド・数字ランダム・漢数字一行・BPシート・ユニットブック |
+| 3-C | 処理系：スピードチェック・かなひろい・ロジカルテスト・スピードボード |
+| 3-D | 記憶系：イメージ記憶 |
+| 3-E | 普通読書 / 倍速読書・カウント呼吸法 |
+| 3-F | 1回の組み立て（4段階・90/45/30/15分）、記録の保存、旧種目の撤去 |
+| 3-G | 級を「制限時間の短縮」方式へ、推移を種目ごとの数字へ |
+
+- **完了条件**：長さを選んで1回通すと、種目ごとの記録が残り、
+  その記録が次の回の級を決めること ✅（`e2e/btr-flow.spec.ts`）
+
+## Phase 4 — Supabase Sync（任意機能）
 
 同期は「あると便利」であって、必須にはしない。ローカルへの書き込みを先に確定させ、
 同期は後追いにする。差し込み位置は `RecordStore` のデコレータ 1 箇所（ARCHITECTURE.md §4-3）。
@@ -114,7 +132,7 @@ Auth と Supabase は入れない。クラウド同期が無い状態で全機�
 - 競合解決の方針（更新時刻の新しい方を採る／記録は削除しない）
 - **完了条件**：同期を無効にしても全機能が変わらず動く
 
-## Phase 4 — AI 機能
+## Phase 5 — AI 機能
 
 MVP 完成後に着手する。インタフェースは先に用意済み。
 
@@ -126,5 +144,7 @@ MVP 完成後に着手する。インタフェースは先に用意済み。
 
 - TypeScript strict、`any` を安易に使わない、Component を巨大化させない
 - Training Logic（`core/`）と UI（`features/`）を分離し、`core/` の React 非依存を purity テストで固定
-- Magic Number は `training-config.ts` に集約
+- Magic Number は設定に集約する（BTR の外は `training-config.ts`、
+  種目ごとの数値は `core/training/btr/<種目>.ts`、級のはしごは `progression.ts`）
+- 種目の一覧は `core/training/btr/exercises.ts` に一か所だけ置く
 - 各 Step 完了時に `Done / Changed / Test Result / Next` を報告する

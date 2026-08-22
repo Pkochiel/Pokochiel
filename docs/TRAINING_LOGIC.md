@@ -1,66 +1,23 @@
 # Speed Reading Lab — Training Logic
 
-すべての閾値・係数は `src/core/config/training-config.ts` に集約する。**ロジック内に数値リテラルを直接書かない。**
+すべての閾値・係数は設定ファイルに集約する。**ロジック内に数値リテラルを直接書かない。**
 本書の関数はすべて `src/core` の純粋関数として実装し、Vitest で検証する。
 
-## 0. training-config.ts（初版）
+**この文書が扱うのは、BTR の外に残っている部分だけである。**
+Baseline 測定・翌日の想起・読書速度（CPM）がそれにあたる。
 
-```ts
-export const READING = {
-  minReadingSeconds: 3,        // これ未満の計測は invalid
-  maxPlausibleCpm: 6000,       // これを超える計測は invalid（誤操作対策）
-  baselineStartMultiplier: 1.15,
-} as const
+BTR の種目そのもの（13種目の作り、級の進み方、1回の組み立て）は
+[BTR_METHOD.md](BTR_METHOD.md) にある。設定は種目ごとに
+`src/core/training/btr/*.ts` へ置き、はしごは `progression.ts` にまとめてある。
 
-export const SPEED_ADAPTATION = {
-  highComprehension: 0.85,
-  lowComprehension: 0.7,
-  increaseRate: 0.05,
-  decreaseRate: 0.05,
-  minMultiplierOfBaseline: 0.8,
-  maxMultiplierOfBaseline: 2.5,
-  minQuestionsForAdaptation: 4,   // 設問が少なすぎる回では速度を動かさない
-  recentWindow: 5,                // 直近 N 件の実績を見る
-} as const
+## 0. 設定の置き場所
 
-export const RECALL = {
-  selfAssessmentSteps: [0, 25, 50, 75, 100],
-  intervalsDays: [1],          // MVP は翌日のみ。将来 [1,3,7] に拡張
-  windowDays: 3,               // scheduled_date から N 日で expired
-  lowRecallThreshold: 50,      // これ未満なら Recall/Structure の配分を増やす
-} as const
-
-export const CHUNKING = {
-  levels: {
-    1: { minChars: 5,  maxChars: 8  },
-    2: { minChars: 8,  maxChars: 15 },
-    3: { minChars: 15, maxChars: 25 },
-    4: { unitsPerChunk: 1 },          // 意味単位そのまま
-    5: { unitsPerChunk: 3 },          // 複数意味単位
-  },
-  minDisplayMs: 250,          // 光感受性リスク帯（>3Hz）に入らないための下限
-  maxDisplayMs: 4000,
-  levelUpAccuracy: 0.85,
-  levelDownAccuracy: 0.6,
-} as const
-
-export const PLAN = {
-  presets: {
-    30: { warmup: 3, speed_push: 5, chunk_reading: 5, structure_reading: 7, comprehension: 5, immediate_recall: 5 },
-    20: { warmup: 2, speed_push: 4, chunk_reading: 3, structure_reading: 5, comprehension: 3, immediate_recall: 3 },
-    10: { warmup: 1, speed_push: 2, chunk_reading: 2, structure_reading: 2, comprehension: 2, immediate_recall: 1 },
-  },
-  reallocationRatio: 0.2,     // 総時間のこの割合までを弱点ブロックへ移す
-  blockMinMinutes: 1,
-} as const
-
-export const SCORING = {
-  comprehensionPassThreshold: 70,
-  recentWindow: 5,
-  skillRadarSpeedCeiling: 2.0,   // baseline の何倍を 100 点とするか
-  delayedRecallWeight: 0.6,      // Recall 軸における翌日想起の重み
-} as const
-```
+| 置き場所 | 中身 |
+|---|---|
+| `src/core/config/training-config.ts` | 読書・想起・難易度・教材の要件（BTR の外に残った分） |
+| `src/core/training/btr/<種目>.ts` | 種目ごとの盤面の大きさ・問題数・制限時間の段 |
+| `src/core/training/btr/progression.ts` | 級のはしご（段ごとの制限時間と、上がる・下がる条件） |
+| `src/core/planner/btr-session.ts` | 1回の組み立て（長さごとの型） |
 
 ## 1. CPM
 
@@ -119,220 +76,7 @@ ERS = CPM × comprehension01 × recall01
 - 欠損時は ERS を算出しない（`null`）。欠損を 0 や 1 で埋めない。
 - **絶対的な能力指数として扱わず、UI では常に内訳と併記する。**
 
-## 5. Daily Training Plan の生成
-
-```ts
-generateDailyPlan(input: {
-  date: LocalDate
-  totalMinutes: 10 | 20 | 30
-  profile: SkillProfile        // 9スキルの状態（純粋な入力）
-  passages: PassageCandidate[] // 各トレーニングに対応できるかのフラグを持つ
-  recentPassageIds: string[]
-  dueRecallCount: number
-  targetCpm / chunkLevel / meaningFlashLevel / preferredDifficulty
-}): DailyTrainingPlan
-```
-
-### 構成の考え方：コア + 任意ブロック
-
-全トレーニングを毎日詰め込むと、1つあたりが短くなりすぎて訓練にならない。
-そのため**毎日必ず行うコア**と、**Skill Profile に応じて選ぶ任意ブロック**に分ける。
-
-| 区分 | トレーニング | 30分 | 20分 | 10分 |
-|---|---|---|---|---|
-| コア | Warm-up | 2 | 1 | 1 |
-| コア | Speed Push | 5 | 4 | 2 |
-| コア | Structure Reading | 6 | 4 | 2 |
-| コア | Comprehension Test | 4 | 3 | 2 |
-| コア | Immediate Recall | 4 | 3 | 1 |
-| 任意 | 予算（合計） | 9 | 5 | 2 |
-| 任意 | ブロック数の上限 | 2 | 1 | 1 |
-
-任意ブロックは予算で入るだけ詰めない。予算を下限（2分）で割り切ると 30分で4ブロック入り、
-コアと合わせて10ブロックになる。ブロックを刻むほど1つあたりが intro と設問で埋まり、
-訓練そのものの時間が痩せるため、**数を絞って1ブロックを長くする**。
-
-任意ブロックの候補と、それが鍛えるスキル：
-
-```
-Meaning Flash       → Meaning Extraction
-Chunk Reading       → Chunk Recognition
-Prediction Reading  → Prediction
-Variable Speed      → Adaptive Reading
-Regression Control  → Reading Speed
-```
-
-### 選択の手順
-
-1. 翌日 Recall があれば、プラン先頭に差し込む（コアの外側・2分）
-2. コア配分をベースとし、弱点に応じて時間を移す（供出元はベース配分の半分を保持）
-3. 任意ブロックを **weak > unmeasured > normal > strong** の順で選ぶ
-   - 既知の弱点の解消を最優先し、その次に「まだ測っていない」を優先する
-   - 同順位のときは日付由来の回転で順番を変え、同じ内容が毎日続かないようにする
-   - 対応教材がないトレーニング（Prediction の停止位置、Variable Speed の区間定義）は候補から外す
-4. 予算を選ばれたブロックへ分配（1ブロック 2〜5分、**1日あたり 30分:2 / 20分:1 / 10分:1 ブロックまで**）
-5. 教材を割り当てる。Speed Push / Chunk / Prediction / Variable Speed / Regression には別々の教材、
-   Comprehension と Immediate Recall は Structure Reading と同じ教材（読んだものを問う）
-6. 生成理由（`generatedReason`）を残す
-
-**合計時間は必ず `totalMinutes` に一致する。** 同じ入力からは常に同じ構成が出る（乱数を使わない）。
-
-### 1セッションの設問量
-
-**設問はブロックごとに独立して決まるため、1ブロックずつ見ている限りは常に「3問だけ」に見える。
-効いてくるのは合計である。** 見直し前は次の状態だった。
-
-| セッション | ブロック数 | 選択式の設問（中央値） | 設問を出すブロック数 |
-|---|---|---|---|
-| 10分 | 7 | 13–18（16） | 3–4 |
-| 20分 | 8 | 16–21（21） | 4–5 |
-| 30分 | 10 | 20–25（24） | 6–7 |
-
-30分のセッションで24問。さらに **10分と20分の設問数がほぼ同じ**だった
-（設問数がブロックの割り当て時間とまったく無関係だったため、短いセッションほど密度が高い）。
-
-見直し後：
-
-| セッション | ブロック数 | 選択式の設問（中央値） | 設問を出すブロック数 |
-|---|---|---|---|
-| 10分 | 7 | 8–13（10） | 3–4 |
-| 20分 | 7 | 10–15（13） | 3–4 |
-| 30分 | 8 | 11–18（18） | 4–5 |
-
-規則は3つ。
-
-1. **設問数はブロックの割り当て時間から出す**（`QUESTIONS.timeShare` / `secondsPerQuestion`）。
-   設問に使ってよいのはブロック時間の 1/3 まで、1問あたり15秒で見積もる。
-   2分のブロックは2問、3分以上で上限の3問。下限は2問（1問では正答率にならない）。
-2. **Structure Reading は本文を全段落読ませ、設問だけを間引く**（最大3段落・最初と最後を必ず含む）。
-   段落を読み飛ばすと、同じ教材を使う Comprehension / Immediate Recall が成立しない。
-3. **Comprehension は5問すべてを出さず4問**。直前の Structure Reading と同じ教材のため、
-   構成（`structure`）を問う設問は観点が重複する。これを最初に落とす。
-
-減らさないもの：
-
-- **Comprehension の4問**は時間で減らさない。3問にすると正答率が 0 / 33 / 67 / 100 となり、
-  合格ライン70%を満たせるのが全問正解だけになる。
-- **読み確認の上限3問**も下げない。2問だと 0 / 50 / 100 の三値になり、
-  レベル調整の閾値（0.6 / 0.85）に対して「維持」の帯が消える。
-- **Meaning Flash の5件**はフラッシュの正誤そのものが訓練であり、読後の確認設問ではない。
-
-上限は `src/data/content/session-question-load.test.ts` が実教材とプラン生成から数えて固定している。
-
-### コア配分の重み付け（明示ルール）
-
-| 状況 | 対応 |
-|---|---|
-| Reading Speed 弱 かつ Comprehension 中〜強 | Speed Push を増やす |
-| Reading Speed 強 かつ Comprehension 弱 | **Speed Push を増やさない。** Structure Reading と Comprehension を増やす |
-| Structure Recognition 弱 | Structure Reading を増やす |
-| Immediate / Delayed Recall 弱 | **速度を落とすのではなく** Recall と Structure Reading を増やす |
-
-**速度を上げることを常に成功とみなさない。** 上の2行目と4行目がその担保である。
-
-## 6. Skill Profile（弱点判定の土台）
-
-9スキルの定義・測定源・状態の分類は [METRICS.md](METRICS.md) §4 を参照。
-
-配分に使う際の要点：
-
-- `unmeasured` を弱点として扱わない（未測定と「測ったうえで弱い」は別）
-- 実測が1つもない新規ユーザーには、コアの標準配分をそのまま使う
-- 同じスコアでも高いレベルで達成したほうが高く評価される（レベル係数）
-
-## 7. 速度適応（Speed Adaptation）
-
-```
-comprehension >= 0.85  → targetCpm × (1 + 0.05)
-0.70 – 0.84            → 維持
-< 0.70                 → targetCpm × (1 - 0.05)
-```
-
-- 初期値：`baselineCpm × READING.baselineStartMultiplier`（= 1.15倍）
-- 出題数が `SPEED_ADAPTATION.minQuestionsForAdaptation` 未満の回は**適応を行わない**（ノイズで振らせない）。
-- 直近 `recentWindow` 件の平均理解度で判定する（1回の結果で乱高下させない）。
-- 結果は `[baselineCpm × 0.8, baselineCpm × 2.5]` にクランプする。**極端な速度を追求しない。**
-
-```ts
-adaptSpeed(input: { currentTargetCpm, baselineCpm, recentComprehension: number[], questionCount: number })
-  : { targetCpm: number; direction: 'up'|'hold'|'down'; reason: string }
-```
-
-## 8. Chunk Reading のレベル制御
-
-教材の `chunks` は**意味単位（原子）**。レベルは「原子をどうグループ化して見せるか」で決まる。
-
-| Level | 表示単位 |
-|---|---|
-| 1 | 5〜8文字（原子が長い場合のみ助詞境界で分割） |
-| 2 | 8〜15文字（原子を結合して窓に合わせる） |
-| 3 | 15〜25文字 |
-| 4 | 意味単位そのまま（原子1つ） |
-| 5 | 複数意味単位（原子3つ程度） |
-
-**原子の内部は原則として割らない。** 窓を超える場合のみ、ヒューリスティック分割器で助詞・句読点境界を探して割る。
-
-表示時間：
-
-```
-displayMs = clamp(chunkChars / (targetCpm / 60) * 1000, minDisplayMs, maxDisplayMs)
-```
-
-`minDisplayMs = 250ms` は光感受性発作リスク（毎秒3回超の明滅）を避けるための**安全下限**であり、設定で下回れないようにする。
-
-レベル昇降：直近のチャンク理解度が `levelUpAccuracy (0.85)` 以上で +1、`levelDownAccuracy (0.6)` 未満で −1。
-
-## 9. 各トレーニングの評価定義
-
-| # | Training | 鍛える認知能力 | 何で測るか | 記録する値 |
-|---|---|---|---|---|
-| 00 | Warm-up | 読む姿勢への切り替え | 測らない | cpm |
-| 01 | Speed Push | Reading Speed | 目標速度で読み、直後に理解度を確認 | cpm, targetCpm, comprehension |
-| 02 | Chunk Reading | Chunk Recognition | チャンク表示後の理解度 × レベル | level, comprehension |
-| 03 | Meaning Flash | Meaning Extraction | 短時間露出後の意味選択の正答率 | accuracyScore, exposureMs, level |
-| 04 | Structure Reading | Structure Recognition | 段落要旨の正答率（全段落を読み、最大3段落を問う） | comprehension |
-| 05 | Prediction Reading | Prediction | 予測の論理方向と論点の合致 | accuracyScore |
-| 06 | Variable Speed | Adaptive Reading | 区間ごとの選択速度と推奨帯の一致率 | accuracyScore |
-| 07 | Regression Control | Reading Speed（無駄な読み戻りの抑制） | 読み戻り密度 × 理解度 | backCount, pauseCount, cpm, comprehension |
-| 08 | Comprehension Test | Comprehension | 5種のうち4問の正答率（構成を問う設問は Structure と重複するため外す） | comprehension |
-| 09 | Immediate Recall | Immediate Recall | Key Point の照合 | immediateRecallScore |
-| 10 | Next-day Recall | Delayed Recall | 同上（翌日） | recallScore（recall_tasks） |
-
-### 各トレーニングの評価の要点
-
-**Meaning Flash**（`core/training/meaning-flash.ts`）
-設問は必ず「言いたかったことは何か」を問い、語句の再生を問わない。
-表示時間はレベルで決まり、下限 800ms を下回らない（極端なフラッシュ表示をしない）。
-正答率でレベルを上下させる ＝ 速さそのものではなく「速くしても意味が取れるか」を上げる。
-
-**Prediction Reading**（`core/training/prediction.ts`）
-完全一致を求めない。`correct`（論点まで一致）100点、`partial`（論理方向は一致）50点、`miss` 0点。
-自由記述には加点するが、これは正確さではなく「予測を言語化したこと」への加点。
-
-**Variable Speed Reading**（`core/training/variable-speed.ts`）
-区間の情報価値（known / example / evidence / claim / key）に対する推奨帯との一致率で採点。
-一致 100点、隣接帯 50点、正反対 0点。**主張・核心を fast で通過した場合は追加減点。**
-全区間を速く読んでも 50点未満にしかならない ＝ CPM 競争にならない。
-
-**Regression Control**（`core/training/regression.ts`）
-読み戻しは禁止しない。読み戻り密度（1000字あたりの回数）と理解度を対で評価する。
-
-```
-読み戻り減 かつ 理解度維持        → improved
-読み戻り減 だが 理解度が15pt以上低下 → too_fast（取りこぼしたまま進んでいる）
-読み戻りが1000字あたり8回超       → needs_more_control
-```
-
-回数の少なさだけでは良いと判断しない。
-
-**Regression Control の設計原則：読み戻りを禁止しない。** ユーザーが必要と判断すれば戻れる。
-結果画面で Back 回数 / Pause 回数 / 速度を提示し、判断材料を返すに留める。
-
-**Variable Speed** は教材に区間ラベル（`known` / `example` / `evidence` / `claim` / `key`）と推奨速度帯を持たせ、
-ユーザーの `←(Slow) / Space(Normal) / →(Fast)` 選択との一致率を Adaptive Reading 軸として採点する。
-スマホでは画面下部の3ボタンで同じ操作を提供する。
-
-## 10. Recall のスケジューリング
+## 5. Recall のスケジューリング
 
 ```ts
 scheduleRecallTasks(input: { passageId, sessionId, completedOn: LocalDate, timezone })
@@ -344,54 +88,61 @@ scheduleRecallTasks(input: { passageId, sessionId, completedOn: LocalDate, timez
 - 同一 `(user, passage, scheduled_date)` は一意。重複生成しない。
 - 将来 `[1, 3, 7]` に拡張しても、この関数の戻り値が増えるだけで呼び出し側は変わらない。
 
-## 11. Streak
+## 6. 続けている日数
 
-- `training_sessions.local_date`（ユーザーTZ）の連続日数。
-- 1日に複数セッションを実施しても 1 とカウントする。
-- **速度だけを伸ばすゲームにしないため**、Streak は「完了したセッション」に対して付与し、記録更新には紐付けない。
+- BTR の記録（`btrResults.localDate`、ユーザーTZ）の連続日数。
+- 1日に何回やっても 1 と数える。
+- **今日まだやっていない日を切らしたことにしない。**
+  夜にやる人が朝に開いたときに 0 と出ると、続いていたものが切れたように見える。
+  今日か昨日に記録があれば、そこから数えはじめる。
+- **速度だけを伸ばすゲームにしないため**、記録の更新には紐付けない。
 
-## 11-b. トレーニング後のフィードバック
+## 7. ユニットテスト対象（必須）
 
-`core/feedback/feedback.ts`。スコアの再掲ではなく「次に何を変えるか」を1〜2文で返す。
+BTR の種目とはしご：
 
-| 状況 | 返す内容 |
-|---|---|
-| 速度上昇 かつ 理解維持 | 肯定（この速度帯が身についてきている） |
-| 速度上昇 かつ 理解低下 | 注意（次回は速度を戻す） |
-| Variable Speed で主張を速く通過 | 注意（どこで落とすべきだったか） |
-| Meaning Extraction 強 かつ Delayed Recall 弱 | 注意（直後に書き出す時間を増やす） |
-| Reading Speed 強 かつ Comprehension 弱 | 注意（速度は上げない） |
+```
+core/training/btr/saccade.test.ts            往復の数え方・たてよこの切り替え・重複押下
+core/training/btr/visual-search.test.ts      盤面の生成・見落とし・押し間違い
+core/training/btr/number-random.test.ts      1から順に拾う判定・4枚の合成
+core/training/btr/pattern-sheet.test.ts      縦書き80列の盤面・発見数と到達列
+core/training/btr/bp-sheet.test.ts           現れて消える時刻・消えた字を押せないこと
+core/training/btr/unit-book.test.ts          よく似た8文の作り分け・正答数
+core/training/btr/kana-pickup.test.ts        拾い率・読んだ範囲の見落とし・級の判定
+core/training/btr/logical-test.test.ts       前提がつながらない出題・3択である必要
+core/training/btr/speed-board.test.ts        盤の外へ出ないこと・同じ向きを続けないこと
+core/training/btr/image-memory.test.ts       2セットのうち良いほうを主スコアにすること
+core/training/btr/breathing.test.ts          少ないほうがよい印が落ちないこと
+core/training/btr/paced-reading.test.ts      分速・3倍の判定・記録として弾く条件
+core/training/btr/progression.test.ts        段ごとの制限時間・上がる下がるの条件・記録からの復元
+core/planner/btr-session.test.ts             長さごとの合計・必ず入る種目・日替わりの回転
+core/metrics/btr-progress.test.ts            種目ごとのまとめ・向きの判定・続けている日数
+```
 
-**速度が上がったこと自体を成果として扱わない。** 理解が落ちていれば肯定的な文言を返さない。
-`FeedbackGenerator` インタフェース経由で呼ぶため、AI Coach への差し替えは実装の入れ替えだけで済む。
-
-## 12. ユニットテスト対象（必須）
+BTR の外に残っている部分：
 
 ```
 core/metrics/cpm.test.ts                     CPM 計算・invalid 判定・境界値
 core/metrics/ers.test.ts                     ERS 計算・欠損時 null・極端な CPM の影響
 core/metrics/baseline-profile.test.ts        中央値・外れ値の除外・タイプ別内訳・再測定
 core/metrics/recall.test.ts                  Key Point 照合・自己評価が主要値を上書きしないこと
-core/metrics/skill-profile.test.ts           4状態の分類・未測定の扱い・レベル係数・傾向
 core/metrics/difficulty.test.ts              DifficultyFactors → difficulty の整合
 core/adaptive/speed.test.ts                  閾値 0.85 / 0.7、クランプ、サンプル不足時 hold
-core/adaptive/training-selection.test.ts     弱点優先・未測定の優先度・回転・コア重み付け
-core/planner/daily-plan.test.ts              合計分数の保存、決定性、教材の対応、弱点反映
-core/training/meaning-flash.test.ts          露出時間の下限・レベル昇降
-core/training/prediction.test.ts             論理方向の部分点・記述加点・上限
-core/training/variable-speed.test.ts         一致率・主張の読み飛ばし減点・速読で高得点にならないこと
-core/training/regression.test.ts             読み戻り減 × 理解低下 → too_fast の判定
-core/feedback/feedback.test.ts               速度上昇を無条件に肯定しないこと・差し替え可能性
-core/scheduler/recall-schedule.test.ts       翌日算出・TZ・期限切れ・重複防止
-core/chunking/segment.test.ts                レベル別の窓、意味単位を割らないこと、下限表示時間
+core/chunking/segment.test.ts                レベル別の窓、意味単位を割らないこと
 core/session/baseline-flow.test.ts           記述確定前に Key Points を見せないこと
 core/session/timer.test.ts                   ポーズ・非表示中の除外
+core/scheduler/recall-schedule.test.ts       翌日算出・TZ・期限切れ・重複防止
+data/content/kana-stories.test.ts            課題文の長さ・対象の密度・問いの散らばり
+data/content/image-words.test.ts             具体物であること・分野が固まらないこと
+data/reading-books.test.ts                   本の登録・桁外れの入力を弾くこと・控えの上限
 ```
 
 E2E（Playwright）：
 
+- 長さを選ぶと、その長さぶんの献立が組まれること
+- 種目を終えると、その場で §5 の形の記録が残ること
+- 残った記録が次の回の級（＝制限時間）を決めること
 - `Baseline → 理解度8問 → Key Point 照合 → 結果` が完走し、理解の内訳まで保存されること
 - 2回目の Baseline で別の教材が出ること
-- `Daily Training`（Meaning Flash / Prediction / Variable Speed を含む）→ `Recall` → `Dashboard`
-  が完走し、各トレーニングの結果が保存されること
-- Progress のチャートと Skill Profile が表示され、表形式でも確認できること
+- 推移に種目ごとの数字と読書の伸びが出ること
+- オフラインで起動し、書いた内容が残ること

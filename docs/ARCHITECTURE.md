@@ -82,37 +82,40 @@ data/       教材コンテンツ／永続化（Repository 実装）— core の
 │  │  │  ├─ layout.tsx
 │  │  │  ├─ onboarding/page.tsx
 │  │  │  ├─ dashboard/page.tsx
+│  │  │  ├─ btr/page.tsx             # 長さを選ぶ + 種目ごとの入口
 │  │  │  ├─ progress/page.tsx
 │  │  │  └─ settings/page.tsx
 │  │  └─ (reading)/                  # distraction-free シェル（ナビなし）
 │  │     ├─ layout.tsx
 │  │     ├─ baseline/page.tsx
-│  │     ├─ training/page.tsx        # 今日のセッションランナー
-│  │     ├─ training/[type]/page.tsx # 単体トレーニング
+│  │     ├─ btr/session/[minutes]/   # その日の献立を順に通す
+│  │     ├─ btr/[slug]/page.tsx      # 1種目だけ試す
 │  │     └─ recall/page.tsx
 │  ├─ core/                          # ← React 非依存
-│  │  ├─ config/training-config.ts   # すべての閾値・係数（Magic Number 禁止の受け皿）
-│  │  ├─ types/                      # domain types（passage / session / result / plan / skill）
+│  │  ├─ config/training-config.ts   # BTR の外に残った閾値・係数
+│  │  ├─ types/                      # domain types（passage / session / result / btr-result）
 │  │  ├─ metrics/                    # cpm / comprehension / recall / ers / baseline-profile
-│  │  │                              #  / skill-profile / dashboard-stats / progress-series
-│  │  ├─ training/                   # 各トレーニングの評価ロジック
-│  │  │                              #  meaning-flash / prediction / variable-speed / regression
-│  │  ├─ feedback/                   # 結果に対する助言の生成（AI 置換可能）
-│  │  ├─ adaptive/                   # speed adaptation / training selection
-│  │  ├─ planner/                    # daily training plan generation
+│  │  │                              #  / btr-progress / progress-series
+│  │  ├─ training/btr/               # BTR の13種目の生成と採点、級のはしご
+│  │  │                              #  exercises / progression / saccade / number-random / ...
+│  │  ├─ adaptive/                   # speed adaptation
+│  │  ├─ planner/btr-session.ts      # 1回の組み立て（長さごとの型・日替わりの回転）
 │  │  ├─ scheduler/                  # next-day recall scheduling
 │  │  ├─ chunking/                   # 日本語チャンク分割（levels / segment / merge）
 │  │  └─ session/                    # セッション進行の状態遷移（純粋関数）
 │  ├─ features/
 │  │  ├─ baseline/ dashboard/ progress/ settings/ recall/
-│  │  └─ training/
-│  │     ├─ shared/                  # ReadingSurface / Pacer / TrainingHud / usePacer / useTimer
-│  │     ├─ speed-push/ chunk-reading/ meaning-flash/ structure-reading/
-│  │     ├─ prediction-reading/ variable-speed/ regression-control/
-│  │     └─ comprehension/ immediate-recall/
+│  │  └─ training/btr/
+│  │     ├─ shared/                  # BtrShell / useCountdown / BtrBlockProps
+│  │     ├─ btr-catalog.tsx          # 種目 → 画面の対応（core の一覧から引く）
+│  │     ├─ btr-session-runner.tsx   # 通しの進行と記録
+│  │     └─ <種目>-block.tsx          # 13種目の画面
 │  ├─ data/
-│  │  ├─ content/passages/*.ts       # 教材（唯一の正・静的 import でオフライン可）
+│  │  ├─ content/passages/*.ts       # Baseline / 想起で使う教材（静的 import でオフライン可）
+│  │  ├─ content/kana-stories.ts     # かなひろいの課題文（自前の物語文）
+│  │  ├─ content/image-words.ts      # イメージ記憶の語
 │  │  ├─ content/index.ts            # 読み出し + zod 検証
+│  │  ├─ reading-books.ts            # 読む本の控え（設定にあたるので単独の鍵）
 │  │  ├─ repositories/               # TrainingRepository（ドメイン規則 + zod 検証）
 │  │  ├─ persistence/                # RecordStore ポートと保存先アダプタ
 │  │  │  ├─ record-store.ts          #   ポート定義
@@ -139,6 +142,10 @@ data/       教材コンテンツ／永続化（Repository 実装）— core の
 ```
 
 ユニットテストは対象ファイルの隣に `*.test.ts` として置く（`core/metrics/cpm.test.ts` 等）。
+
+**種目の一覧は `core/training/btr/exercises.ts` に一か所だけ置く。**
+画面・計画・記録がそれぞれ別の一覧を持つと、種目を足したときに必ずどれかが取り残される。
+`features/training/btr/btr-catalog.tsx` が持つのは「どの画面を出すか」だけである。
 
 ## 4. 永続化：Local First
 
@@ -311,7 +318,6 @@ E2E は時間依存を避けるため、`?e2e=1` 時にトレーニング時間�
 | インタフェース | 現行の実装 | 将来 |
 |---|---|---|
 | `RecallEvaluator` | Key Point の照合（`keyPointRecallEvaluator`） | LLM による意味的一致度の評価 |
-| `FeedbackGenerator` | ルールベース（`ruleBasedFeedback`） | AI Coach |
 | `TrainingRepository` | `RecordStoreRepository` | 変更しない（保存先の差し替えは下位で行う） |
 | `RecordStore` | `IndexedDbRecordStore`（代替: localStorage / メモリ） | `SyncingRecordStore` + Supabase |
 | `BackupService` | 端末内の JSON Export / Import | クラウドバックアップ |
@@ -322,11 +328,12 @@ E2E は時間依存を避けるため、`?e2e=1` 時にトレーニング時間�
 | Phase | 内容 | アーキテクチャ上の要点 |
 |---|---|---|
 | 1 | ローカルで動くトレーニング MVP | localStorage のみ。Auth なし。教材は静的 import |
-| 1.5 | Training Core Enhancement | Skill Profile を導入し、Daily Training の構成を Skill Profile から決める |
+| 1.5 | Training Core Enhancement | Skill Profile を導入し、Daily Training の構成を Skill Profile から決める（Phase 3 で撤去） |
 | 2 | Local First / Offline | `RecordStore` ポート + IndexedDB。PWA でオフライン起動。Backup / Restore。Auth と Supabase は入れない |
 | 2.5 | Release Hardening | CI・スキーマ migration・backup の version 管理・SW の更新戦略。データ構造を変えても既存の記録が壊れない土台 |
-| 3 | Supabase Sync（任意機能） | `SyncingRecordStore` を 1 枚挟む。同期が無くても全機能が動く状態は維持する |
-| 4 | AI コンテンツ生成 / Recall 評価 | `ContentProvider` と `RecallEvaluator` をインタフェース経由で差し替え |
+| 3 | BTRメソッドへの移行 | 訓練の中身を総取り替えした。保存層はそのまま使い、`btrResults` を足しただけ |
+| 4 | Supabase Sync（任意機能） | `SyncingRecordStore` を 1 枚挟む。同期が無くても全機能が動く状態は維持する |
+| 5 | AI コンテンツ生成 / Recall 評価 | `ContentProvider` と `RecallEvaluator` をインタフェース経由で差し替え |
 
 **Phase 2（完了）：** 保存先を IndexedDB に移し、PWA でオフライン起動できるようにした。
 Auth と Supabase は入れていない。クラウドが存在しない状態で全機能が完結することを要件とし、
@@ -334,6 +341,16 @@ E2E（`e2e/offline.spec.ts`）でネットワークを切った状態の起動�
 
 **Phase 2.5（完了）：** 変更を安全に配るための土台。GitHub Actions での自動検証、
 IndexedDB の version migration、backup の schemaVersion、ビルド単位の SW キャッシュ。
+
+**Phase 3（完了）：** 訓練の中身を BTRメソッドへ総取り替えした（[BTR_METHOD.md](BTR_METHOD.md)）。
+Phase 2 / 2.5 で用意した土台がそのまま効いた点を記録しておく。
+
+- 記録の追加は `COLLECTIONS` に `btrResults` を1行足し、migration を1つ追記しただけで済んだ。
+  バックアップは `COLLECTIONS` を辿るので自動で乗り、BTR より前のファイルもそのまま取り込める
+- 保存層は訓練の中身を知らないので、旧種目の撤去で触る必要がなかった
+- **Service Worker だけは手で直す必要があった。** プリキャッシュに旧経路が
+  ハードコードされていて、消えた URL を取りに行って install が失敗した。
+  経路の一覧を1か所にまとめられていなかったのが原因である
 新機能ではなく「今後の変更で既存ユーザーの記録と PWA を壊さない」ための整備。
 
 **同期を後から足すときの原則：** ローカルへの書き込みを先に確定させ、同期は後追いにする。

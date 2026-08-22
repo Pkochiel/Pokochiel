@@ -6,6 +6,11 @@ Phase 1（localStorage）と Phase 2（Supabase / PostgreSQL）で**同一のド
 ## 1. ドメイン型（`src/core/types`）
 
 ```ts
+/**
+ * 旧トレーニングの種類。BTR へ移行したので新しくは書き込まれない。
+ * 過去の記録を読み出せなくならないよう、型と列だけ残してある。
+ * いまのトレーニングは BtrResult（後述）に記録する。
+ */
 export type TrainingType =
   | 'warmup' | 'speed_push' | 'chunk_reading' | 'meaning_flash'
   | 'structure_reading' | 'prediction_reading' | 'variable_speed'
@@ -78,7 +83,7 @@ export interface TrainingSession {
   startedAt: Date
   completedAt: Date | null
   durationSeconds: number | null
-  sessionType: 'baseline' | 'daily' | 'single' | 'recall'
+  sessionType: 'baseline' | 'daily' | 'single' | 'recall' | 'btr'
 }
 
 export interface TrainingResult {
@@ -110,27 +115,57 @@ export interface TrainingResult {
 }
 ```
 
-### Skill Profile（保存しない導出値）
+### BtrResult（BTR の種目1回分）
 
 ```ts
-export type SkillId =
-  | 'reading_speed' | 'chunk_recognition' | 'meaning_extraction'
-  | 'structure_recognition' | 'prediction' | 'adaptive_reading'
-  | 'comprehension' | 'immediate_recall' | 'delayed_recall'
-
-export type SkillState = 'unmeasured' | 'weak' | 'normal' | 'strong'
-
-export interface SkillMeasurement {
-  id: SkillId
-  score: number | null      // 未測定は null（0 で埋めない）
-  state: SkillState
-  sampleCount: number
-  trend: number | null      // 後半平均 − 前半平均
+export interface BtrResult {
+  id: string
+  userId: string
+  sessionId: string
+  /** 種目。core/training/btr/exercises.ts の BtrExercise */
+  exercise: string
+  /** 同じ種目の中の区別。サッケイドのたて・よこ。持たない種目は null */
+  variant: string | null
+  /** 主スコア（到達数・正答数・往復数など） */
+  score: number
+  /** 複数試行する種目の各試行スコア。数字ランダムの4枚など */
+  attempts: number[]
+  elapsedMs: number | null
+  /** そのとき課された制限時間。級に相当する */
+  timeLimitMs: number | null
+  /** 見落とし率など、質を表す副指標（0–100） */
+  accuracy: number | null
+  /** そのときの級（0 始まり）。級を持たない種目は null */
+  level: number | null
+  /** その回の判定。次の回の級は「使った級 + この判定」から出す */
+  judgement: 'advance' | 'stay' | 'fallback' | null
+  /** 小さいほうがよい種目か。カウント呼吸法だけ true */
+  lowerIsBetter: boolean
+  /** 分速（字/分）。読書だけが持つ */
+  cpm: number | null
+  valid: boolean
+  localDate: LocalDate
+  createdAt: string
 }
 ```
 
-Skill Profile は `training_results` と `recall_tasks` から**毎回算出する**。
-テーブルには持たない。判定基準を変えたときに過去の記録と食い違わないようにするため。
+**TrainingResult と別の型にしている理由。**
+BTR の受講記録は「種目ごとの数値の並び」であって、CPM や理解度を軸にしたものではない。
+同じ表に押し込むと、どちらの種目でも使われない列が並ぶ。
+
+**日付を記録そのものが持つ理由。**
+日替わりで種目を回すのに「その種目を最後にやった日」が要る。
+毎回セッションを突き合わせずに済ませたい。
+
+**複数試行を並びのまま残す理由。**
+合計や平均に潰すと、4枚のうちどの枚で落ちたかが消える。
+
+**`lowerIsBetter` を残す理由。**
+記録に残さないと、あとから推移グラフの向きを決められない。
+
+**級を保存しない理由。**
+いまの級は毎回 `currentLevel(exercise, history)` で記録から出す。
+判定の条件を変えたときに、過去の記録から引き直せるようにするためである。
 
 ### Baseline Profile（profiles に保存）
 
@@ -364,7 +399,7 @@ create policy "read questions of readable passages" on public.training_questions
 
 ### 6-1. IndexedDB（既定の保存先）
 
-データベース名 `speed-reading-lab` / **version 1**。object store は collection と 1 対 1、
+データベース名 `speed-reading-lab` / **version 2**。object store は collection と 1 対 1、
 `keyPath` は `id`。索引は作らず、全件取得して呼び出し側で絞る（個人の学習記録の規模で足りる）。
 
 | object store | 内容 | 件数の目安 |
@@ -374,7 +409,8 @@ create policy "read questions of readable passages" on public.training_questions
 | `results` | TrainingResult | 1 セッションあたり 5〜10 件 |
 | `readingTests` | ReadingTest（Baseline） | 数件 |
 | `recallTasks` | RecallTask | 1 日 0〜数件 |
-| `plans` | DailyTrainingPlan（1 日 1 件） | 1 日 1 件 |
+| `btrResults` | BtrResult（BTR の種目1回分） | 1 回あたり 4〜13 件 |
+| `plans` | 旧 DailyTrainingPlan。BTR へ移行したので新しくは書き込まない | — |
 
 読み出しは `TrainingRepository` が zod で検証し、スキーマに合わない行は捨てる。
 **返す順序は `createdAt` 昇順**に揃える（IndexedDB は id 順で返すため。
@@ -385,6 +421,7 @@ trend 判定・直近 N 件・最新 Baseline が並び順に意味を持たせ�
 | version | 内容 |
 |---|---|
 | 1 | collection ごとの object store を作る（`keyPath: id`） |
+| 2 | BTR の種目記録を入れる `btrResults` を作る |
 
 - スキーマ変更は `SCHEMA_MIGRATIONS` への**追記のみ**で行い、
   端末に保存されている version から順に適用する。
@@ -403,6 +440,7 @@ srl:v1:profile        Profile        （単体オブジェクト）
 srl:v1:sessions       TrainingSession[]
 srl:v1:results        TrainingResult[]
 srl:v1:reading_tests  ReadingTest[]
+srl:v1:btr_results    BtrResult[]
 srl:v1:recall_tasks   RecallTask[]
 srl:v1:plans          DailyTrainingPlan[]
 ```
