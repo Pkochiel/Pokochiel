@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import { NumberRandomBlock } from './number-random-block'
 import { SaccadeBlock } from './saccade-block'
 
 /**
@@ -54,7 +55,7 @@ export const BTR_CATALOG: readonly BtrEntry[] = [
     name: '数字ランダム',
     stage: 'field',
     summary: '散らばった 1〜99 を1から順に拾う。4枚',
-    Component: null,
+    Component: NumberRandomBlock,
   },
   {
     slug: 'pattern-sheet',
