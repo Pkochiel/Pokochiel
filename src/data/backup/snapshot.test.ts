@@ -217,7 +217,7 @@ describe('BTR の記録の持ち出し', () => {
     const store = new MemoryRecordStore()
     await store.put('btrResults', btrResult)
 
-    const snapshot = await exportSnapshot(store, { exportedAt: null, appVersion: null })
+    const snapshot = await exportSnapshot(store, { exportedAt: '2026-08-22T09:00:00.000Z', appVersion: '0.1.0' })
     const restored = new MemoryRecordStore()
     const result = await importSnapshot(restored, snapshot)
 
@@ -232,7 +232,7 @@ describe('BTR の記録の持ち出し', () => {
     const restored = new MemoryRecordStore()
     await importSnapshot(
       restored,
-      await exportSnapshot(store, { exportedAt: null, appVersion: null }),
+      await exportSnapshot(store, { exportedAt: '2026-08-22T09:00:00.000Z', appVersion: '0.1.0' }),
     )
     const [row] = (await restored.list('btrResults')) as { attempts: number[] }[]
     expect(row?.attempts).toEqual([22, 20, 18, 24])
@@ -242,7 +242,7 @@ describe('BTR の記録の持ち出し', () => {
     // btrResults を持たないファイルが「壊れている」扱いにならないこと。
     const store = new MemoryRecordStore()
     await store.put('profile', profile)
-    const snapshot = await exportSnapshot(store, { exportedAt: null, appVersion: null })
+    const snapshot = await exportSnapshot(store, { exportedAt: '2026-08-22T09:00:00.000Z', appVersion: '0.1.0' })
     const withoutBtr = { ...snapshot, data: { ...snapshot.data } }
     delete (withoutBtr.data as Record<string, unknown>)['btrResults']
 
