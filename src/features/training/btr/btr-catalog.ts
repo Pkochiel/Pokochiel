@@ -1,7 +1,11 @@
 import type { ComponentType } from 'react'
+import { LogicalTestBlock } from './logical-test-block'
 import { NumberRandomBlock } from './number-random-block'
 import { PatternSheetBlock } from './pattern-sheet-block'
 import { SaccadeBlock } from './saccade-block'
+import { SpeedBoardBlock } from './speed-board-block'
+import { SpeedCheckBlock } from './speed-check-block'
+import { UnitBookBlock } from './unit-book-block'
 
 /**
  * BTR の種目の一覧。
@@ -77,14 +81,14 @@ export const BTR_CATALOG: readonly BtrEntry[] = [
     name: 'ユニットブック',
     stage: 'field',
     summary: 'よく似た8つの文から、お題の文を探す',
-    Component: null,
+    Component: UnitBookBlock,
   },
   {
     slug: 'speed-check',
     name: 'スピードチェック',
     stage: 'focus',
     summary: '方角漢字の組み合わせから対象を探す',
-    Component: null,
+    Component: SpeedCheckBlock,
   },
   {
     slug: 'kana-pickup',
@@ -98,14 +102,14 @@ export const BTR_CATALOG: readonly BtrEntry[] = [
     name: 'ロジカルテスト',
     stage: 'focus',
     summary: '前提から結論が導けるかを判定する。30問',
-    Component: null,
+    Component: LogicalTestBlock,
   },
   {
     slug: 'speed-board',
     name: 'スピードボード',
     stage: 'focus',
     summary: '5×5 の盤で、真ん中からの移動の行き先を指す',
-    Component: null,
+    Component: SpeedBoardBlock,
   },
   {
     slug: 'image-memory',
