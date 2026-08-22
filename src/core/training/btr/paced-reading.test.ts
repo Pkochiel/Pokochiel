@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   PACED_READING,
   READING_MODE_LABELS,
+  READING_REJECTION_MESSAGES,
   isValidCharsPerPage,
   measureProgress,
   scorePacedReading,
@@ -57,7 +58,71 @@ describe('scorePacedReading', () => {
   })
 
   it('妥当な入力なら valid になる', () => {
-    expect(scorePacedReading({ mode: 'paced', charsPerPage: 600, pages: 20, elapsedMs: 600_000 }).valid).toBe(true)
+    const result = scorePacedReading({
+      mode: 'paced',
+      charsPerPage: 600,
+      pages: 20,
+      elapsedMs: 600_000,
+    })
+    expect(result.valid).toBe(true)
+    expect(result.rejection).toBeNull()
+  })
+
+  it('1分に満たない測定は記録として認めない', () => {
+    // 7ページを2秒で「読んだ」と入れると毎分17万字になる。
+    // その一件だけで推移が読めなくなるので、速度として扱わない。
+    const result = scorePacedReading({
+      mode: 'paced',
+      charsPerPage: 620,
+      pages: 7,
+      elapsedMs: 2_000,
+    })
+    expect(result.valid).toBe(false)
+    expect(result.rejection).toBe('too-short')
+  })
+
+  it('ちょうど1分は認める', () => {
+    expect(
+      scorePacedReading({ mode: 'paced', charsPerPage: 600, pages: 2, elapsedMs: 60_000 }).valid,
+    ).toBe(true)
+  })
+
+  it('実在しない速さは記録として認めない', () => {
+    // ページ数の打ち間違い（7を70と入れるなど）を止める。
+    const result = scorePacedReading({
+      mode: 'paced',
+      charsPerPage: 620,
+      pages: 700,
+      elapsedMs: 600_000,
+    })
+    expect(result.cpm).toBeGreaterThan(PACED_READING.maxCpm)
+    expect(result.valid).toBe(false)
+    expect(result.rejection).toBe('too-fast')
+  })
+
+  it('弾いた理由には必ず説明がある', () => {
+    for (const input of [
+      { pages: 0, charsPerPage: 600, elapsedMs: 600_000 },
+      { pages: 20, charsPerPage: 6, elapsedMs: 600_000 },
+      { pages: 7, charsPerPage: 620, elapsedMs: 2_000 },
+      { pages: 700, charsPerPage: 620, elapsedMs: 600_000 },
+    ]) {
+      const { rejection } = scorePacedReading({ mode: 'paced', ...input })
+      expect(rejection).not.toBeNull()
+      expect(READING_REJECTION_MESSAGES[rejection!].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('弾いても数字そのものは返す', () => {
+    // 画面で「何を入れたからこうなったか」を見せるために要る。
+    const result = scorePacedReading({
+      mode: 'paced',
+      charsPerPage: 620,
+      pages: 7,
+      elapsedMs: 2_000,
+    })
+    expect(result.pages).toBe(7)
+    expect(result.cpm).toBeGreaterThan(0)
   })
 })
 

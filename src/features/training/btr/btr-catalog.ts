@@ -6,6 +6,7 @@ import { KanaPickupBlock } from './kana-pickup-block'
 import { LogicalTestBlock } from './logical-test-block'
 import { NumberRandomBlock } from './number-random-block'
 import { PatternSheetBlock } from './pattern-sheet-block'
+import { ReadingBlock } from './reading-block'
 import { SaccadeBlock } from './saccade-block'
 import { SpeedBoardBlock } from './speed-board-block'
 import { SpeedCheckBlock } from './speed-check-block'
@@ -127,7 +128,7 @@ export const BTR_CATALOG: readonly BtrEntry[] = [
     name: '普通読書 / 倍速読書',
     stage: 'reading',
     summary: '自分の本を読み、ページ数と時間を記録する',
-    Component: null,
+    Component: ReadingBlock,
   },
 ]
 

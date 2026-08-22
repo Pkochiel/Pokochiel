@@ -33,6 +33,28 @@ export const PACED_READING = {
   maxCharsPerPage: 3000,
   /** 目標。入会時の3倍を目指す、というスクールの方針に合わせる。 */
   targetMultiplier: 3,
+  /**
+   * 読む時間（ms）。1回90分の配分に合わせる。
+   *
+   * 時間を決めて「何ページ読めたか」を測る。ページ数を決めて時間を測る形にすると、
+   * 読み終わりの見えるページまで飛ばす人が出て、速度が水増しされる。
+   */
+  durationMs: { normal: 8 * 60_000, paced: 12 * 60_000 } satisfies Record<ReadingMode, number>,
+  /**
+   * 記録として受け付ける最短の測定時間（ms）。
+   *
+   * 読みはじめてすぐ止めると、わずかな時間が分母に来て分速が跳ねる。
+   * 7ページを2秒で「読んだ」と入れれば毎分17万字になり、その一件だけで
+   * 推移が読めなくなる。1分に満たない測定は速度ではない。
+   */
+  minElapsedMs: 60_000,
+  /**
+   * 記録として受け付ける分速の上限（字/分）。
+   *
+   * ページ数の打ち間違い（7を70と入れるなど）を止める。
+   * 実在しうる速さより十分に高く置き、明らかな入力の事故だけを弾く。
+   */
+  maxCpm: 20_000,
 } as const
 
 export interface ReadingBook {
@@ -53,6 +75,17 @@ export interface PacedReadingInput {
   readonly elapsedMs: number
 }
 
+export type ReadingRejection = 'too-short' | 'no-pages' | 'chars-per-page' | 'too-fast'
+
+export const READING_REJECTION_MESSAGES: Record<ReadingRejection, string> = {
+  'too-short':
+    '測った時間が1分に足りません。短すぎる測定では分速が跳ねてしまうため、記録に残しません。',
+  'no-pages': '読んだページ数が入っていません。',
+  'chars-per-page': '1ページの文字数が桁外れです。本を登録し直してください。',
+  'too-fast':
+    'ページ数か時間の入力が合っていないようです。この速さは記録に残しません。',
+}
+
 export interface PacedReadingResult {
   readonly mode: ReadingMode
   readonly pages: number
@@ -64,6 +97,8 @@ export interface PacedReadingResult {
   readonly cpm: number
   /** 記録として妥当か。短すぎる測定や桁の外れた入力を弾く。 */
   readonly valid: boolean
+  /** 妥当でないときの理由。妥当なら null。 */
+  readonly rejection: ReadingRejection | null
 }
 
 /** 1ページの文字数として受け付けられる値か。 */
@@ -83,6 +118,18 @@ export function scorePacedReading(input: PacedReadingInput): PacedReadingResult 
   const pagesPerMinute = minutes <= 0 ? 0 : Math.round((pages / minutes) * 10) / 10
   const cpm = minutes <= 0 ? 0 : Math.round(characters / minutes)
 
+  // 弾く理由は先に見つかったものを返す。直せる順に並べている。
+  const rejection: ReadingRejection | null =
+    pages <= 0
+      ? 'no-pages'
+      : !isValidCharsPerPage(charsPerPage)
+        ? 'chars-per-page'
+        : elapsedMs < PACED_READING.minElapsedMs
+          ? 'too-short'
+          : cpm > PACED_READING.maxCpm
+            ? 'too-fast'
+            : null
+
   return {
     mode,
     pages,
@@ -90,7 +137,8 @@ export function scorePacedReading(input: PacedReadingInput): PacedReadingResult 
     elapsedMs,
     pagesPerMinute,
     cpm,
-    valid: pages > 0 && elapsedMs > 0 && isValidCharsPerPage(charsPerPage),
+    valid: rejection === null,
+    rejection,
   }
 }
 
