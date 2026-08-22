@@ -220,8 +220,9 @@ export function ReadingBlock({ mode: fixedMode, onComplete }: ReadingBlockProps)
           onNext={() =>
             onComplete({
               // 記録するのはページ数。分速はそこから出した数字なので別に持つ。
+              // 読み方は種目そのものが分かれている（普通読書／倍速読書）ので
+              // variant は付けない。付けると名前が二重になる。
               score: result.pages,
-              variant: mode,
               cpm: result.cpm,
               elapsedMs: result.elapsedMs,
               valid: result.valid,

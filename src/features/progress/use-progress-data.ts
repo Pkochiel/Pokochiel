@@ -1,8 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { computeSkillProfile } from '@/core/metrics/skill-profile'
-import type { SkillProfile } from '@/core/types'
 import { buildProgressSeries, type ProgressSeries } from '@/core/metrics/progress-series'
 import { formatLocalDate } from '@/core/util/date'
 import { getRepository, resolveTimezone } from '@/data/repositories'
@@ -10,11 +8,10 @@ import { getRepository, resolveTimezone } from '@/data/repositories'
 export interface ProgressData {
   loading: boolean
   series: ProgressSeries | null
-  skillProfile: SkillProfile | null
 }
 
 export function useProgressData(days: number): ProgressData {
-  const [data, setData] = useState<ProgressData>({ loading: true, series: null, skillProfile: null })
+  const [data, setData] = useState<ProgressData>({ loading: true, series: null })
 
   useEffect(() => {
     let cancelled = false
@@ -24,12 +21,11 @@ export function useProgressData(days: number): ProgressData {
       const timezone = resolveTimezone()
       const today = formatLocalDate(new Date(), timezone)
 
-      const [results, readingTests, recallTasks, sessions, profile] = await Promise.all([
+      const [results, readingTests, recallTasks, sessions] = await Promise.all([
         repository.listResults(),
         repository.listReadingTests(),
         repository.listRecallTasks(),
         repository.listSessions(),
-        repository.getProfile(),
       ])
       if (cancelled) return
 
@@ -43,11 +39,6 @@ export function useProgressData(days: number): ProgressData {
           today,
           days,
           timezone,
-        }),
-        skillProfile: computeSkillProfile({
-          results,
-          recallTasks,
-          baselineCpm: profile?.baselineCpm ?? null,
         }),
       })
     }
