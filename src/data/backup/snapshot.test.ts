@@ -207,6 +207,7 @@ describe('BTR の記録の持ち出し', () => {
     timeLimitMs: 60_000,
     accuracy: 92,
     level: 1,
+    judgement: 'stay',
     lowerIsBetter: false,
     cpm: null,
     valid: true,

@@ -50,8 +50,9 @@ export interface BtrExerciseSpec {
   /**
    * 級を持つか。
    *
-   * カウント呼吸法だけ false。訓練ではなく状態の測定なので、
-   * 上げ下げする級がない。
+   * 級とは「課される制限時間の短さ」のことなので、課す条件が変わらない種目は
+   * 級を持たない。カウント呼吸法（状態の測定）、かなひろい（2分固定で
+   * 拾えた数がそのまま成績）、読書（自分の本を決まった時間読む）がそれにあたる。
    */
   readonly leveled: boolean
   /** 読書の種目だけが持つ。普通読書と倍速読書を型で分ける。 */
@@ -72,12 +73,12 @@ export const BTR_EXERCISES: readonly BtrExerciseSpec[] = [
   { id: 'pattern_sheet', name: '漢数字一行', stage: 'field', minutes: 6, always: false, leveled: true },
   { id: 'bp_sheet', name: 'BPシート', stage: 'field', minutes: 6, always: false, leveled: true },
   { id: 'speed_check', name: 'スピードチェック', stage: 'focus', minutes: 6, always: false, leveled: true },
-  { id: 'kana_pickup', name: 'かなひろい', stage: 'focus', minutes: 8, always: false, leveled: true },
+  { id: 'kana_pickup', name: 'かなひろい', stage: 'focus', minutes: 8, always: false, leveled: false },
   { id: 'logical_test', name: 'ロジカルテスト', stage: 'focus', minutes: 8, always: false, leveled: true },
   { id: 'speed_board', name: 'スピードボード', stage: 'focus', minutes: 8, always: false, leveled: true },
   { id: 'image_memory', name: 'イメージ記憶', stage: 'focus', minutes: 10, always: false, leveled: true },
   { id: 'normal_reading', name: '普通読書', stage: 'reading', minutes: 8, always: false, leveled: false, mode: 'normal' },
-  { id: 'paced_reading', name: '倍速読書', stage: 'reading', minutes: 12, always: true, leveled: true, mode: 'paced' },
+  { id: 'paced_reading', name: '倍速読書', stage: 'reading', minutes: 12, always: true, leveled: false, mode: 'paced' },
 ]
 
 const BY_ID = new Map(BTR_EXERCISES.map((spec) => [spec.id, spec]))

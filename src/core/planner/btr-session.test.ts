@@ -168,10 +168,16 @@ describe('BTR_EXERCISES', () => {
     expect(total - btrExercise('bp_sheet').minutes).toBe(86)
   })
 
-  it('級を持たないのはカウント呼吸法と普通読書だけ', () => {
-    // 呼吸は訓練ではなく状態の測定。普通読書は速さを競う場ではない。
+  it('課す条件が変わらない種目は級を持たない', () => {
+    // 級とは制限時間の短さのこと。呼吸は状態の測定、かなひろいは2分固定、
+    // 読書は自分の本を決まった時間読むだけなので、上げ下げする段がない。
     const unleveled = BTR_EXERCISES.filter((spec) => !spec.leveled).map((spec) => spec.id)
-    expect(unleveled).toEqual(['breathing', 'normal_reading'])
+    expect(unleveled).toEqual([
+      'breathing',
+      'kana_pickup',
+      'normal_reading',
+      'paced_reading',
+    ])
   })
 
   it('毎回入るのは呼吸・サッケイド・倍速読書だけ', () => {

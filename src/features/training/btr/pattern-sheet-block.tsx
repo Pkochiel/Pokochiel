@@ -10,6 +10,7 @@ import {
   type PatternResult,
   type PatternSheet,
 } from '@/core/training/btr/pattern-sheet'
+import { timeLimitAt } from '@/core/training/btr/progression'
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
@@ -29,13 +30,15 @@ export type PatternSheetBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
-export function PatternSheetBlock({ seed, onComplete }: PatternSheetBlockProps) {
+export function PatternSheetBlock({ seed, level = 0, onComplete }: PatternSheetBlockProps) {
   const [phase, setPhase] = useState<Phase>('intro')
   const [turn, setTurn] = useState(0)
   const [results, setResults] = useState<PatternResult[]>([])
 
   const targets = PATTERN_SHEET.targets
   const target = targets[turn]
+  // 級が上がるとターンが短くなる。
+  const timeLimitMs = timeLimitAt('pattern_sheet', level) ?? PATTERN_SHEET.turnMs
 
   const finishTurn = useCallback(
     (result: PatternResult) => {
@@ -68,7 +71,7 @@ export function PatternSheetBlock({ seed, onComplete }: PatternSheetBlockProps) 
         </p>
         <p>
           「{targets.join('」「')}」の順に {targets.length} ターン、各{' '}
-          {Math.round(PATTERN_SHEET.turnMs / 1000)} 秒です。
+          {Math.round(timeLimitMs / 1000)} 秒です。
           いくつあるかは伝えません。端から順に見ていってください。
         </p>
         <p>列には5刻みで番号がついています。どこまで進んだかの目印です。</p>
@@ -85,6 +88,7 @@ export function PatternSheetBlock({ seed, onComplete }: PatternSheetBlockProps) 
         target={target}
         turnNumber={turn + 1}
         turnTotal={targets.length}
+        timeLimitMs={timeLimitMs}
         onFinish={finishTurn}
       />
     )
@@ -112,7 +116,7 @@ export function PatternSheetBlock({ seed, onComplete }: PatternSheetBlockProps) 
         onComplete({
           score: found,
           attempts: results.map((result) => result.found),
-          timeLimitMs: PATTERN_SHEET.turnMs,
+          timeLimitMs,
           accuracy: found + wrong === 0 ? 0 : Math.round((found / (found + wrong)) * 100),
         })
       }
@@ -125,18 +129,19 @@ interface TurnRunProps {
   readonly target: string
   readonly turnNumber: number
   readonly turnTotal: number
+  readonly timeLimitMs: number
   readonly onFinish: (result: PatternResult) => void
 }
 
 /** 1ターンぶんの実行。制限時間はこの部品の寿命と一致する。 */
-function TurnRun({ seed, target, turnNumber, turnTotal, onFinish }: TurnRunProps) {
+function TurnRun({ seed, target, turnNumber, turnTotal, timeLimitMs, onFinish }: TurnRunProps) {
   const [sheet] = useState<PatternSheet>(() => buildPatternSheet({ seed, targetLabel: target }))
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
 
   const picksRef = useRef<PatternPick[]>([])
 
   const countdown = useCountdown({
-    durationMs: PATTERN_SHEET.turnMs,
+    durationMs: timeLimitMs,
     onFinish: () => onFinish(scorePatternSheet(sheet, picksRef.current)),
   })
 

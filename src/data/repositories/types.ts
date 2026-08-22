@@ -65,6 +65,8 @@ export interface BtrResultInput {
   timeLimitMs?: number | null
   accuracy?: number | null
   level?: number | null
+  /** その回の判定。次の回の級を出すのに使う。 */
+  judgement?: 'advance' | 'stay' | 'fallback' | null
   /** カウント呼吸法のように小さいほうがよい種目だけ true。 */
   lowerIsBetter?: boolean
   cpm?: number | null

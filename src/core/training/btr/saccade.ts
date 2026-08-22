@@ -45,6 +45,18 @@ export interface SaccadeStep {
   readonly atMs: number
 }
 
+export const SACCADE = {
+  /** 1本の長さ（ms） */
+  durationMs: 30_000,
+  /**
+   * 段ごとの点灯間隔（ms）。短くなるほど上の段。
+   *
+   * 700ms は目で追って余裕がある速さ、300ms は先読みしないと追いつかない速さ。
+   * 教室の紙のシートには点灯がないので、この刻みはこちらで置いたものである。
+   */
+  intervalsMs: [700, 600, 500, 420, 360, 300],
+} as const
+
 export interface SaccadeSchedule {
   readonly axis: SaccadeAxis
   readonly intervalMs: number

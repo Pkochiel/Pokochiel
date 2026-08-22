@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { SPEED_CHECK, buildSpeedCheckSheet, speedCheckTargetFor } from '@/core/training/btr/sheets'
 import { scoreSearch } from '@/core/training/btr/visual-search'
 import { cn } from '@/lib/cn'
+import { timeLimitAt } from '@/core/training/btr/progression'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
 import type { BtrBlockProps } from './shared/btr-block'
@@ -20,12 +21,15 @@ export type SpeedCheckBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
-export function SpeedCheckBlock({ seed, onComplete }: SpeedCheckBlockProps) {
+export function SpeedCheckBlock({ seed, level = 0, onComplete }: SpeedCheckBlockProps) {
   const [phase, setPhase] = useState<Phase>('intro')
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set())
 
   const target = useMemo(() => speedCheckTargetFor(seed), [seed])
   const sheet = useMemo(() => buildSpeedCheckSheet(seed, target), [seed, target])
+
+  // 級が上がると探す時間が短くなる。
+  const timeLimitMs = timeLimitAt('speed_check', level) ?? SPEED_CHECK.turnMs
 
   const picksRef = useRef<number[]>([])
 
@@ -34,7 +38,7 @@ export function SpeedCheckBlock({ seed, onComplete }: SpeedCheckBlockProps) {
   const [finalPicks, setFinalPicks] = useState<readonly number[]>([])
 
   const countdown = useCountdown({
-    durationMs: SPEED_CHECK.turnMs,
+    durationMs: timeLimitMs,
     onFinish: () => {
       setFinalPicks([...picksRef.current])
       setPhase('result')
@@ -69,7 +73,7 @@ export function SpeedCheckBlock({ seed, onComplete }: SpeedCheckBlockProps) {
           <strong className="text-fg">「{target}」だけを押してください。</strong>
         </p>
         <p>
-          {Math.round(SPEED_CHECK.turnMs / 1000)} 秒です。
+          {Math.round(timeLimitMs / 1000)} 秒です。
           「東西」と「西東」は別のものとして扱います。
         </p>
         <p>1文字ずつ確かめると間に合いません。2文字のかたまりとして見てください。</p>
@@ -138,8 +142,8 @@ export function SpeedCheckBlock({ seed, onComplete }: SpeedCheckBlockProps) {
         onComplete({
           score: result.found,
           accuracy: result.precision,
-          elapsedMs: SPEED_CHECK.turnMs,
-          timeLimitMs: SPEED_CHECK.turnMs,
+          elapsedMs: timeLimitMs,
+          timeLimitMs,
         })
       }
     />

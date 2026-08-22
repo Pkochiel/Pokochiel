@@ -237,6 +237,7 @@ export class RecordStoreRepository implements TrainingRepository {
       timeLimitMs: input.timeLimitMs ?? null,
       accuracy: input.accuracy ?? null,
       level: input.level ?? null,
+      judgement: input.judgement ?? null,
       lowerIsBetter: input.lowerIsBetter ?? false,
       cpm: input.cpm ?? null,
       valid: input.valid ?? true,

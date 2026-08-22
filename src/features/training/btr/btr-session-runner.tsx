@@ -2,12 +2,23 @@
 
 import { createElement, useState } from 'react'
 import type { BtrSessionMinutes } from '@/core/planner/btr-session'
+import type { BtrExercise } from '@/core/training/btr/exercises'
 import { BTR_STAGE_LABELS, btrExercise } from '@/core/training/btr/exercises'
+import {
+  levelLabel,
+  nextLevel,
+  type BtrJudgement,
+} from '@/core/training/btr/progression'
 import { Button, ButtonLink } from '@/components/ui/button'
 import { btrComponentFor } from './btr-catalog'
 import { BtrScreen } from './shared/btr-shell'
 import type { BtrOutcome } from './shared/btr-block'
-import { saveBtrResult, useBtrSession, useCompleteBtrSession } from './use-btr-session'
+import {
+  judgementFor,
+  saveBtrResult,
+  useBtrSession,
+  useCompleteBtrSession,
+} from './use-btr-session'
 
 /**
  * その日のトレーニングを通す画面。
@@ -21,10 +32,24 @@ export interface BtrSessionRunnerProps {
 }
 
 interface Finished {
-  readonly exercise: string
+  readonly exercise: BtrExercise
   readonly name: string
   readonly score: number
   readonly variant: string | undefined
+  /** 級が動いたときだけ入る（「6級 → 5級」） */
+  readonly levelMove: string | null
+}
+
+/** 級が動いたときだけ「6級 → 5級」を作る。動かなければ null。 */
+function describeLevelMove(
+  exercise: BtrExercise,
+  level: number | null,
+  judgement: BtrJudgement | null,
+): string | null {
+  if (level === null || judgement === null || judgement === 'stay') return null
+  const after = nextLevel(exercise, level, judgement)
+  if (after === level) return null
+  return `${levelLabel(exercise, level)} → ${levelLabel(exercise, after)}`
 }
 
 export function BtrSessionRunner({ minutes }: BtrSessionRunnerProps) {
@@ -88,14 +113,15 @@ export function BtrSessionRunner({ minutes }: BtrSessionRunnerProps) {
     const level = btrExercise(block.exercise).leveled ? (levels[block.exercise] ?? 0) : null
 
     const complete = (outcome: BtrOutcome) => {
-      // 保存を待たずに次へ進める。書き込みが遅れてもトレーニングは止めない。
-      void saveBtrResult({
+      const input = {
         sessionId,
         localDate: today,
         exercise: block.exercise,
         level,
         ...outcome,
-      })
+      }
+      // 保存を待たずに次へ進める。書き込みが遅れてもトレーニングは止めない。
+      void saveBtrResult(input)
       setFinished((current) => [
         ...current,
         {
@@ -103,6 +129,7 @@ export function BtrSessionRunner({ minutes }: BtrSessionRunnerProps) {
           name: block.name,
           score: outcome.score,
           variant: outcome.variant,
+          levelMove: describeLevelMove(block.exercise, level, judgementFor(input)),
         },
       ])
       if (index + 1 >= session.blocks.length) {
@@ -138,7 +165,12 @@ export function BtrSessionRunner({ minutes }: BtrSessionRunnerProps) {
             key={`${item.exercise}-${item.variant ?? ''}`}
             className="flex items-center justify-between px-4 py-3"
           >
-            <dt className="text-sm text-fg-muted">{item.name}</dt>
+            <dt className="text-sm text-fg-muted">
+              {item.name}
+              {item.levelMove ? (
+                <span className="mt-0.5 block text-xs text-brand">{item.levelMove}</span>
+              ) : null}
+            </dt>
             <dd className="tabular text-sm font-medium">{item.score}</dd>
           </div>
         ))}

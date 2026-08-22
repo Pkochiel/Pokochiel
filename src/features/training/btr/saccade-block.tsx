@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  SACCADE,
   SACCADE_AXIS_LABELS,
   buildSaccadeSchedule,
   saccadeAxisFor,
@@ -27,12 +28,10 @@ import type { BtrBlockProps } from './shared/btr-block'
  */
 
 /** ブロックの長さ。教室のスコア（30秒で57往復など）に合わせる。 */
-const DURATION_MS = 30_000
 
 export type SaccadeBlockProps = BtrBlockProps
 
 /** 級ごとの点灯間隔（ms）。上がるほど短くなる。 */
-const INTERVALS_MS = [700, 600, 500, 420, 360, 300]
 
 type Phase = 'intro' | 'running' | 'result'
 
@@ -45,10 +44,10 @@ export function SaccadeBlock({ seed, level = 0, onComplete }: SaccadeBlockProps)
   const [flash, setFlash] = useState<'hit' | 'miss' | null>(null)
 
   const axis = useMemo(() => saccadeAxisFor(seed), [seed])
-  const intervalMs = INTERVALS_MS[Math.min(level, INTERVALS_MS.length - 1)] ?? INTERVALS_MS[0]!
+  const intervalMs = SACCADE.intervalsMs[Math.min(level, SACCADE.intervalsMs.length - 1)] ?? SACCADE.intervalsMs[0]!
 
   const schedule = useMemo(
-    () => buildSaccadeSchedule({ axis, intervalMs, durationMs: DURATION_MS, seed }),
+    () => buildSaccadeSchedule({ axis, intervalMs, durationMs: SACCADE.durationMs, seed }),
     [axis, intervalMs, seed],
   )
 
@@ -58,7 +57,7 @@ export function SaccadeBlock({ seed, level = 0, onComplete }: SaccadeBlockProps)
   const stepRef = useRef(0)
 
   const countdown = useCountdown({
-    durationMs: DURATION_MS,
+    durationMs: SACCADE.durationMs,
     onFinish: () => {
       setAnswers([...answersRef.current])
       setPhase('result')
@@ -177,7 +176,7 @@ export function SaccadeBlock({ seed, level = 0, onComplete }: SaccadeBlockProps)
           // その日どちらをやったかで数字が跳ねる。
           variant: axis,
           accuracy: result.accuracy,
-          elapsedMs: DURATION_MS,
+          elapsedMs: SACCADE.durationMs,
           timeLimitMs: intervalMs,
         })
       }

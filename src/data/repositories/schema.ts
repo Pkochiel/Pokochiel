@@ -160,6 +160,7 @@ export const btrResultSchema = z.object({
   timeLimitMs: z.number().nonnegative().nullable().default(null),
   accuracy: score,
   level: z.number().int().nonnegative().nullable().default(null),
+  judgement: z.enum(['advance', 'stay', 'fallback']).nullable().default(null),
   lowerIsBetter: z.boolean().default(false),
   cpm: z.number().nonnegative().nullable().default(null),
   valid: z.boolean().default(true),

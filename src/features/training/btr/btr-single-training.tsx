@@ -3,13 +3,14 @@
 import { createElement, useEffect, useState } from 'react'
 import { ButtonLink } from '@/components/ui/button'
 import { btrExercise, type BtrExercise } from '@/core/training/btr/exercises'
+import { currentLevel, levelLabel, nextLevel } from '@/core/training/btr/progression'
 import { formatLocalDate } from '@/core/util/date'
 import type { LocalDate } from '@/core/types'
 import { getRepository, resolveTimezone } from '@/data/repositories'
 import { findBtrEntry } from './btr-catalog'
 import { BtrScreen } from './shared/btr-shell'
 import type { BtrOutcome } from './shared/btr-block'
-import { saveBtrResult } from './use-btr-session'
+import { judgementFor, saveBtrResult } from './use-btr-session'
 
 /**
  * 1種目だけを開いて試す画面。
@@ -33,6 +34,7 @@ export function BtrSingleTraining({ slug }: BtrSingleTrainingProps) {
   const [ready, setReady] = useState<Ready | null>(null)
   const [round, setRound] = useState(0)
   const [done, setDone] = useState(false)
+  const [levelMove, setLevelMove] = useState<string | null>(null)
 
   useEffect(() => {
     if (exercise === null) return
@@ -40,13 +42,12 @@ export function BtrSingleTraining({ slug }: BtrSingleTrainingProps) {
 
     async function load(id: NonNullable<typeof exercise>) {
       const today = formatLocalDate(new Date(), resolveTimezone())
-      // その種目のいまの級。記録がなければ最初の段から。
+      // その種目のいまの級。記録から出す。なければ最初の段から。
       const history = await getRepository().listBtrResults({ exercise: id })
-      const last = history[history.length - 1]
       if (cancelled) return
       setReady({
         today,
-        level: btrExercise(id).leveled ? (last?.level ?? 0) : null,
+        level: btrExercise(id).leveled ? currentLevel(id, history) : null,
       })
     }
 
@@ -70,6 +71,7 @@ export function BtrSingleTraining({ slug }: BtrSingleTrainingProps) {
     return (
       <BtrScreen>
         <h1 className="text-xl font-semibold">{entry.name} を終えました</h1>
+        {levelMove ? <p className="mt-3 text-sm font-medium text-brand">{levelMove}</p> : null}
         <p className="mt-3 text-sm leading-relaxed text-fg-muted">
           記録を残しました。1回ごとの上下より、何週かの向きを見てください。
         </p>
@@ -81,6 +83,7 @@ export function BtrSingleTraining({ slug }: BtrSingleTrainingProps) {
             type="button"
             onClick={() => {
               setRound((current) => current + 1)
+              setLevelMove(null)
               setDone(false)
             }}
             className="text-sm text-fg-muted hover:text-fg"
@@ -93,6 +96,19 @@ export function BtrSingleTraining({ slug }: BtrSingleTrainingProps) {
   }
 
   const complete = (outcome: BtrOutcome) => {
+    const input = {
+      sessionId: '',
+      localDate: ready.today,
+      exercise,
+      level: ready.level,
+      ...outcome,
+    }
+    const judgement = judgementFor(input)
+    setLevelMove(
+      ready.level === null || judgement === null || judgement === 'stay'
+        ? null
+        : describeMove(exercise, ready.level, judgement === 'advance' ? 1 : -1),
+    )
     void record(exercise, ready, outcome)
     setDone(true)
   }
@@ -130,4 +146,11 @@ async function record(
     level: ready.level,
     ...outcome,
   })
+}
+
+/** 級が動いたときだけ「6級 → 5級」を作る。 */
+function describeMove(exercise: BtrExercise, level: number, step: 1 | -1): string | null {
+  const after = nextLevel(exercise, level, step === 1 ? 'advance' : 'fallback')
+  if (after === level) return null
+  return `${levelLabel(exercise, level)} → ${levelLabel(exercise, after)}`
 }

@@ -27,14 +27,14 @@ export type LogicalTestBlockProps = BtrBlockProps
 
 type Phase = 'intro' | 'running' | 'result'
 
-export function LogicalTestBlock({ seed, level = 2, onComplete }: LogicalTestBlockProps) {
+export function LogicalTestBlock({ seed, level = 0, onComplete }: LogicalTestBlockProps) {
   const [phase, setPhase] = useState<Phase>('intro')
   const [index, setIndex] = useState(0)
 
   const questions = useMemo(() => buildLogicalQuestions(seed), [seed])
   const timeLimitMs =
     LOGICAL_TEST.timeLimits[Math.min(level, LOGICAL_TEST.timeLimits.length - 1)] ??
-    LOGICAL_TEST.defaultTimeLimitMs
+    LOGICAL_TEST.timeLimits[0]!
 
   const answersRef = useRef(new Map<string, LogicalAnswer>())
 

@@ -6,7 +6,13 @@ import {
   type BtrSession,
   type BtrSessionMinutes,
 } from '@/core/planner/btr-session'
-import type { BtrExercise } from '@/core/training/btr/exercises'
+import { BTR_EXERCISES, type BtrExercise } from '@/core/training/btr/exercises'
+import {
+  currentLevel,
+  judgeBtr,
+  type BtrJudgement,
+  type LevelHistoryEntry,
+} from '@/core/training/btr/progression'
 import { formatLocalDate } from '@/core/util/date'
 import type { LocalDate } from '@/core/types'
 import { getRepository, resolveTimezone } from '@/data/repositories'
@@ -47,14 +53,23 @@ export function useBtrSession(minutes: BtrSessionMinutes): BtrSessionState {
       const today = formatLocalDate(new Date(), resolveTimezone())
       const history = await repository.listBtrResults()
 
-      // 種目ごとの「最後にやった日」と「そのときの級」。
-      // 記録は古い順に並ぶので、後から来たもので上書きすれば最新が残る。
+      // 種目ごとの「最後にやった日」。記録は古い順に並ぶので、
+      // 後から来たもので上書きすれば最新が残る。
       const lastDoneAt: Partial<Record<BtrExercise, string>> = {}
-      const levels: Partial<Record<BtrExercise, number>> = {}
       for (const result of history) {
-        const exercise = result.exercise as BtrExercise
-        lastDoneAt[exercise] = result.localDate
-        if (result.level !== null) levels[exercise] = result.level
+        lastDoneAt[result.exercise as BtrExercise] = result.localDate
+      }
+
+      // いまの級は記録から出す。級そのものを持ち越さないのは、
+      // 判定の条件を変えたときに過去の記録から引き直せるようにするため。
+      const entries: LevelHistoryEntry[] = history.map((result) => ({
+        exercise: result.exercise,
+        level: result.level,
+        judgement: result.judgement,
+      }))
+      const levels: Partial<Record<BtrExercise, number>> = {}
+      for (const spec of BTR_EXERCISES) {
+        if (spec.leveled) levels[spec.id] = currentLevel(spec.id, entries)
       }
 
       const session = buildBtrSession({ minutes, seed: today, lastDoneAt })
@@ -93,13 +108,30 @@ export interface SaveBtrResultInput {
   readonly valid?: boolean | undefined
 }
 
+/**
+ * その回の判定。
+ *
+ * 保存と表示の両方から呼ぶ。片方で別に出すと、画面が「上がった」と言いながら
+ * 記録は据え置き、ということが起こりうる。
+ */
+export function judgementFor(input: SaveBtrResultInput): BtrJudgement | null {
+  if (input.level === null) return null
+  return judgeBtr(input.exercise, {
+    score: input.score,
+    accuracy: input.accuracy ?? null,
+  })
+}
+
 /** 種目1回分を保存する。保存に失敗してもトレーニングは止めない。 */
 export async function saveBtrResult(input: SaveBtrResultInput): Promise<void> {
+  const judgement = judgementFor(input)
+
   await getRepository().saveBtrResult({
     sessionId: input.sessionId,
     localDate: input.localDate,
     exercise: input.exercise,
     level: input.level,
+    judgement,
     score: input.score,
     variant: input.variant ?? null,
     attempts: input.attempts ? [...input.attempts] : [],

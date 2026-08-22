@@ -134,6 +134,13 @@ export interface BtrResult {
   /** そのときの級（0 始まり）。級を持たない種目は null。 */
   level: number | null
   /**
+   * その回の判定（advance / stay / fallback）。級を持たない種目は null。
+   *
+   * 次の回の級は「使った級 + この判定」から出す。級そのものを持ち越さないのは、
+   * 判定の条件を変えたときに過去の記録から引き直せるようにするため。
+   */
+  judgement: string | null
+  /**
    * 小さいほうがよい種目か。
    *
    * カウント呼吸法だけ true。推移グラフや「伸びたか」の判定で
