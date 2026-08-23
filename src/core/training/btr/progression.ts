@@ -32,7 +32,7 @@ const patternSheetTotal = PATTERN_SHEET.columnCount * PATTERN_SHEET.targets.leng
 export interface LevelRule {
   /**
    * 段ごとの制限時間（ms）。短いほど上の段。
-   * サッケイドだけは点灯間隔で、そのほかは1試行の制限時間。
+   * サッケイドだけは1往復にかける目安の時間で、そのほかは1試行の制限時間。
    */
   readonly timeLimits: readonly number[]
   /** 上がるのに要る主スコア。0 なら見ない。 */
@@ -43,6 +43,18 @@ export interface LevelRule {
   readonly fallbackScore: number
   /** これを下回ったら下がる正確さ（%）。null なら見ない。 */
   readonly fallbackAccuracy: number | null
+  /**
+   * 制限時間が「1回あたりの目安」である種目。
+   *
+   * ほとんどの種目では、制限時間が縮むと課題そのものが難しくなるので、
+   * 求めるスコアは据え置きでよい。サッケイドだけは30秒で固定されていて、
+   * 段が上がっても課題は変わらない（縮むのは1往復にかける目安の時間）。
+   * そのままだと一度上がったあと同じ成績で上がりつづけてしまうので、
+   * **求める往復数を段に応じて増やす。**
+   */
+  readonly paceTarget?: boolean
+  /** paceTarget の種目で、1回ぶんの長さ（ms）。往復数に直すのに使う。 */
+  readonly totalMs?: number
 }
 
 /**
@@ -53,11 +65,16 @@ export interface LevelRule {
  */
 export const LEVEL_RULES: Partial<Record<BtrExercise, LevelRule>> = {
   saccade: {
+    // 段ごとの1往復あたりの目安時間。その段の往復数に直して判定する。
     timeLimits: SACCADE.intervalsMs,
+    paceTarget: true,
+    totalMs: SACCADE.durationMs,
+    // 正確さを測れる種目ではない（自分で数えた往復数しかない）ので主スコアだけで見る。
+    // 実際の閾値は段ごとに計算される（advanceScore は使わない）。
     advanceScore: 0,
-    advanceAccuracy: 90,
+    advanceAccuracy: null,
     fallbackScore: 0,
-    fallbackAccuracy: 70,
+    fallbackAccuracy: null,
   },
   number_random: {
     timeLimits: NUMBER_RANDOM.timeLimits,
@@ -144,6 +161,28 @@ export interface JudgeInput {
   readonly score: number
   /** 0–100。持たない種目は null。 */
   readonly accuracy: number | null
+  /** そのとき課されていた段。paceTarget の種目で閾値を出すのに要る。 */
+  readonly level?: number
+}
+
+/**
+ * その段で求める主スコア。
+ *
+ * paceTarget の種目では、1回ぶんの長さを目安時間で割った往復数になる。
+ * それ以外は段によらず一定。
+ */
+export function requiredScoreAt(
+  rule: LevelRule,
+  level: number,
+  kind: 'advance' | 'fallback',
+): number {
+  if (rule.paceTarget !== true || rule.totalMs === undefined) {
+    return kind === 'advance' ? rule.advanceScore : rule.fallbackScore
+  }
+  const index = Math.min(Math.max(0, level), rule.timeLimits.length - 1)
+  const target = Math.round(rule.totalMs / (rule.timeLimits[index] ?? rule.totalMs))
+  // 下がるのは、その段で求める数の半分にも届かなかったとき。
+  return kind === 'advance' ? target : Math.round(target / 2)
 }
 
 /**
@@ -157,8 +196,12 @@ export function judgeBtr(exercise: BtrExercise, result: JudgeInput): BtrJudgemen
   const rule = levelRuleFor(exercise)
   if (rule === null) return 'stay'
 
+  const level = result.level ?? 0
+  const advanceScore = requiredScoreAt(rule, level, 'advance')
+  const fallbackScore = requiredScoreAt(rule, level, 'fallback')
+
   const accuracy = result.accuracy
-  if (rule.fallbackScore > 0 && result.score < rule.fallbackScore) return 'fallback'
+  if (fallbackScore > 0 && result.score < fallbackScore) return 'fallback'
   if (
     rule.fallbackAccuracy !== null &&
     accuracy !== null &&
@@ -167,7 +210,7 @@ export function judgeBtr(exercise: BtrExercise, result: JudgeInput): BtrJudgemen
     return 'fallback'
   }
 
-  const scoreOk = rule.advanceScore <= 0 || result.score >= rule.advanceScore
+  const scoreOk = advanceScore <= 0 || result.score >= advanceScore
   const accuracyOk =
     rule.advanceAccuracy === null || (accuracy !== null && accuracy >= rule.advanceAccuracy)
   return scoreOk && accuracyOk ? 'advance' : 'stay'

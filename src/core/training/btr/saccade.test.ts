@@ -1,143 +1,125 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SACCADE,
   SACCADE_AXES,
-  buildSaccadeSchedule,
+  SACCADE_AXIS_LABELS,
+  buildSaccadeSheet,
   saccadeAxisFor,
   scoreSaccade,
-  type SaccadeAnswer,
 } from './saccade'
 
-const schedule = (seed = 'day') =>
-  buildSaccadeSchedule({ axis: 'horizontal', intervalMs: 500, durationMs: 30_000, seed })
-
 describe('saccadeAxisFor', () => {
-  it('たて・よこのどちらかを返す', () => {
-    for (const day of ['2026-09-01', '2026-09-02', '2026-09-03']) {
-      expect(SACCADE_AXES).toContain(saccadeAxisFor(day))
+  it('たてかよこのどちらかを返す', () => {
+    for (let i = 0; i < 30; i += 1) {
+      expect(SACCADE_AXES).toContain(saccadeAxisFor(`day-${i}`))
     }
   })
 
   it('同じ日なら同じ向きになる', () => {
-    // 画面を開き直しただけで課題が変わると、記録の意味が壊れる。
-    expect(saccadeAxisFor('2026-09-01')).toBe(saccadeAxisFor('2026-09-01'))
+    // 開き直しただけで課題が変わると、記録の意味が壊れる。
+    expect(saccadeAxisFor('2026-08-22')).toBe(saccadeAxisFor('2026-08-22'))
   })
 
-  it('日が変われば向きが切り替わる日がある', () => {
-    const days = Array.from({ length: 30 }, (_, i) => `2026-09-${String(i + 1).padStart(2, '0')}`)
-    expect(new Set(days.map(saccadeAxisFor)).size).toBe(2)
+  it('日が変われば向きも変わりうる', () => {
+    const seen = new Set(Array.from({ length: 30 }, (_, i) => saccadeAxisFor(`day-${i}`)))
+    expect(seen.size).toBe(2)
+  })
+
+  it('両方の向きに名前がある', () => {
+    expect(SACCADE_AXIS_LABELS.vertical).toBe('たてサッケイド')
+    expect(SACCADE_AXIS_LABELS.horizontal).toBe('よこサッケイド')
   })
 })
 
-describe('buildSaccadeSchedule', () => {
-  it('間隔で割り切った数だけ点灯する', () => {
-    expect(schedule().steps).toHaveLength(60)
+describe('buildSaccadeSheet', () => {
+  it('既定で8本の線を作る', () => {
+    // 実物のシートがたて8列・よこ8行。
+    expect(buildSaccadeSheet()).toHaveLength(SACCADE.lines)
+    expect(SACCADE.lines).toBe(8)
   })
 
-  it('点灯の時刻が間隔どおりに並ぶ', () => {
-    const steps = schedule().steps
-    expect(steps[0]?.atMs).toBe(0)
-    expect(steps[1]?.atMs).toBe(500)
-    expect(steps[59]?.atMs).toBe(29_500)
+  it('線に通し番号を振る', () => {
+    expect(buildSaccadeSheet().map((line) => line.index)).toEqual(
+      Array.from({ length: SACCADE.lines }, (_, i) => i),
+    )
   })
 
-  it('同じ種なら同じ並びになる', () => {
-    expect(schedule('a').steps).toEqual(schedule('a').steps)
+  it('等間隔に並べる', () => {
+    // 視線を動かす距離を一定に保つため、間隔は揃える。
+    const offsets = buildSaccadeSheet(5).map((line) => line.offset)
+    const gaps = offsets.slice(1).map((offset, i) => offset - offsets[i]!)
+    for (const gap of gaps) expect(gap).toBeCloseTo(gaps[0]!, 10)
   })
 
-  it('種が変われば並びが変わる', () => {
-    const a = schedule('a').steps.map((s) => s.side)
-    const b = schedule('zzz').steps.map((s) => s.side)
-    expect(a).not.toEqual(b)
+  it('両端まで使う', () => {
+    const offsets = buildSaccadeSheet(8).map((line) => line.offset)
+    expect(offsets[0]).toBe(0)
+    expect(offsets[offsets.length - 1]).toBe(1)
   })
 
-  it('完全な交互にはしない', () => {
-    // 完全に交互だと目を閉じてリズムだけで当てられ、見て判断する課題でなくなる。
-    const steps = schedule().steps
-    const repeats = steps.filter((step, i) => i > 0 && step.side === steps[i - 1]?.side)
-    expect(repeats.length).toBeGreaterThan(0)
+  it('1本なら真ん中に置く', () => {
+    expect(buildSaccadeSheet(1)).toEqual([{ index: 0, offset: 0.5 }])
   })
 
-  it('左右の偏りが極端にならない', () => {
-    const steps = schedule().steps
-    const starts = steps.filter((step) => step.side === 'start').length
-    expect(starts).toBeGreaterThan(steps.length * 0.3)
-    expect(starts).toBeLessThan(steps.length * 0.7)
-  })
-
-  it('間隔や長さが 0 以下なら点灯しない', () => {
-    const seed = 'x'
-    expect(
-      buildSaccadeSchedule({ axis: 'vertical', intervalMs: 0, durationMs: 1000, seed }).steps,
-    ).toEqual([])
-    expect(
-      buildSaccadeSchedule({ axis: 'vertical', intervalMs: 500, durationMs: 0, seed }).steps,
-    ).toEqual([])
+  it('0 本以下なら空', () => {
+    expect(buildSaccadeSheet(0)).toEqual([])
+    expect(buildSaccadeSheet(-3)).toEqual([])
   })
 })
 
 describe('scoreSaccade', () => {
-  const answersFor = (correct: number): SaccadeAnswer[] =>
-    schedule()
-      .steps.slice(0, correct)
-      .map((step) => ({ index: step.index, side: step.side }))
-
-  it('正しく答えた回数を往復数にする', () => {
-    expect(scoreSaccade(schedule(), answersFor(20)).hits).toBe(20)
+  it('往復数をそのままスコアにする', () => {
+    expect(scoreSaccade(57, SACCADE.durationMs).laps).toBe(57)
   })
 
-  it('答えなかったぶんを skipped として数える', () => {
-    const result = scoreSaccade(schedule(), answersFor(20))
-    expect(result.skipped).toBe(40)
-    expect(result.total).toBe(60)
+  it('8本ごとに1周と数える', () => {
+    const result = scoreSaccade(19, SACCADE.durationMs)
+    expect(result.sheets).toBe(2)
+    expect(result.line).toBe(3)
   })
 
-  it('誤った側を答えたら miss になる', () => {
-    const steps = schedule().steps
-    const wrong: SaccadeAnswer[] = steps.slice(0, 5).map((step) => ({
-      index: step.index,
-      side: step.side === 'start' ? 'end' : 'start',
-    }))
-    const result = scoreSaccade(schedule(), wrong)
-    expect(result.hits).toBe(0)
-    expect(result.misses).toBe(5)
-    expect(result.accuracy).toBe(0)
+  it('ちょうど1周なら次の周の先頭に戻る', () => {
+    const result = scoreSaccade(8, SACCADE.durationMs)
+    expect(result.sheets).toBe(1)
+    expect(result.line).toBe(0)
   })
 
-  it('同じ点灯に何度答えても1回として数える', () => {
-    // 連打で往復数を稼げないようにする。
-    const step = schedule().steps[0]!
-    const spammed: SaccadeAnswer[] = Array.from({ length: 50 }, () => ({
-      index: step.index,
-      side: step.side,
-    }))
-    expect(scoreSaccade(schedule(), spammed).hits).toBe(1)
+  it('1分あたりに直した数も出す', () => {
+    // 長さを変えても比べられるようにする。
+    expect(scoreSaccade(30, 30_000).perMinute).toBe(60)
   })
 
-  it('連打の1回目が誤りなら、後から正解を足しても救われない', () => {
-    const step = schedule().steps[0]!
-    const wrongThenRight: SaccadeAnswer[] = [
-      { index: step.index, side: step.side === 'start' ? 'end' : 'start' },
-      { index: step.index, side: step.side },
-    ]
-    const result = scoreSaccade(schedule(), wrongThenRight)
-    expect(result.hits).toBe(0)
-    expect(result.misses).toBe(1)
+  it('0 往復でも落ちない', () => {
+    const result = scoreSaccade(0, SACCADE.durationMs)
+    expect(result.laps).toBe(0)
+    expect(result.sheets).toBe(0)
+    expect(result.perMinute).toBe(0)
   })
 
-  it('答えたぶんに対する正答率を出す', () => {
-    const steps = schedule().steps
-    const mixed: SaccadeAnswer[] = [
-      ...steps.slice(0, 3).map((step) => ({ index: step.index, side: step.side })),
-      { index: steps[3]!.index, side: steps[3]!.side === 'start' ? 'end' : 'start' },
-    ]
-    // 4回答えて3回正解 → 75%。答えなかったぶんは分母に入れない。
-    expect(scoreSaccade(schedule(), mixed).accuracy).toBe(75)
+  it('負や小数は切り詰める', () => {
+    // 押し間違いや丸めで妙な値が入っても、記録は整数の往復数に保つ。
+    expect(scoreSaccade(-5, SACCADE.durationMs).laps).toBe(0)
+    expect(scoreSaccade(12.7, SACCADE.durationMs).laps).toBe(12)
   })
 
-  it('一度も答えなければ 0 になる', () => {
-    const result = scoreSaccade(schedule(), [])
-    expect(result.hits).toBe(0)
-    expect(result.accuracy).toBe(0)
-    expect(result.skipped).toBe(60)
+  it('時間が 0 なら分速を出さない', () => {
+    expect(scoreSaccade(10, 0).perMinute).toBe(0)
+  })
+})
+
+describe('段の刻み', () => {
+  it('上の段ほど1往復にかける時間が短い', () => {
+    const steps = SACCADE.intervalsMs
+    for (let i = 1; i < steps.length; i += 1) {
+      expect(steps[i]!).toBeLessThan(steps[i - 1]!)
+    }
+  })
+
+  it('公開スコアの範囲と噛み合っている', () => {
+    // 30秒で50〜80往復という数字から逆算した刻みになっていること。
+    const fastest = SACCADE.intervalsMs[SACCADE.intervalsMs.length - 1]!
+    const slowest = SACCADE.intervalsMs[0]!
+    expect(SACCADE.durationMs / fastest).toBeGreaterThanOrEqual(80)
+    expect(SACCADE.durationMs / slowest).toBeLessThanOrEqual(50)
   })
 })

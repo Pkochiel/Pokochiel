@@ -7,6 +7,7 @@ import {
   levelLabel,
   levelRuleFor,
   nextLevel,
+  requiredScoreAt,
   timeLimitAt,
   topLevel,
 } from './progression'
@@ -235,5 +236,57 @@ describe('levelLabel', () => {
   it('段を持たない種目に級はない', () => {
     expect(levelLabel('breathing', 0)).toBeNull()
     expect(levelLabel('kana_pickup', 0)).toBeNull()
+  })
+})
+
+describe('1回あたりの目安が段になる種目（サッケイド）', () => {
+  it('段が上がるほど求める往復数が増える', () => {
+    // 30秒は変わらないので、段が上がっても課題そのものは難しくならない。
+    // 求める数を増やさないと、同じ成績で上がりつづけてしまう。
+    const rule = levelRuleFor('saccade')!
+    const required = rule.timeLimits.map((_, level) =>
+      requiredScoreAt(rule, level, 'advance'),
+    )
+    for (let i = 1; i < required.length; i += 1) {
+      expect(required[i]!).toBeGreaterThan(required[i - 1]!)
+    }
+  })
+
+  it('その段の目安に届けば上がる', () => {
+    const rule = levelRuleFor('saccade')!
+    const target = requiredScoreAt(rule, 2, 'advance')
+    expect(judgeBtr('saccade', { score: target, accuracy: null, level: 2 })).toBe('advance')
+    expect(judgeBtr('saccade', { score: target - 1, accuracy: null, level: 2 })).toBe('stay')
+  })
+
+  it('前の段で上がれた成績が、次の段では上がれない', () => {
+    // ここが壊れていると、一度上がったあと同じ成績で最上段まで行ってしまう。
+    const rule = levelRuleFor('saccade')!
+    const atLevel0 = requiredScoreAt(rule, 0, 'advance')
+    expect(judgeBtr('saccade', { score: atLevel0, accuracy: null, level: 0 })).toBe('advance')
+    expect(judgeBtr('saccade', { score: atLevel0, accuracy: null, level: 1 })).toBe('stay')
+  })
+
+  it('半分にも届かなければ下がる', () => {
+    const rule = levelRuleFor('saccade')!
+    const target = requiredScoreAt(rule, 3, 'advance')
+    expect(
+      judgeBtr('saccade', { score: Math.floor(target / 2) - 1, accuracy: null, level: 3 }),
+    ).toBe('fallback')
+  })
+
+  it('正確さを見ない', () => {
+    // 自分で数えた往復数しかないので、正確さという数字が存在しない。
+    const rule = levelRuleFor('saccade')!
+    expect(rule.advanceAccuracy).toBeNull()
+    expect(
+      judgeBtr('saccade', { score: requiredScoreAt(rule, 0, 'advance'), accuracy: null, level: 0 }),
+    ).toBe('advance')
+  })
+
+  it('ほかの種目は段によって閾値が変わらない', () => {
+    // 制限時間が縮むぶん課題そのものが難しくなるので、求めるスコアは据え置きでよい。
+    const rule = levelRuleFor('logical_test')!
+    expect(requiredScoreAt(rule, 0, 'advance')).toBe(requiredScoreAt(rule, 4, 'advance'))
   })
 })

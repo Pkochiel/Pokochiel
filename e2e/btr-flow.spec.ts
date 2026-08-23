@@ -123,7 +123,7 @@ test('記録が次の回の制限時間を決める', async ({ page }) => {
 
 test('種目はひとつずつでも開ける', async ({ page }) => {
   for (const [slug, marker] of [
-    ['saccade', '視線だけを動かしてください'],
+    ['saccade', '印から印へ目だけを飛ばして'],
     ['number-random', '順に押してください'],
     ['kana-pickup', '物語の内容も考えながら'],
     ['image-memory', '上下2つずつ並びます'],

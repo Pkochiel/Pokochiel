@@ -119,6 +119,9 @@ export function judgementFor(input: SaveBtrResultInput): BtrJudgement | null {
   return judgeBtr(input.exercise, {
     score: input.score,
     accuracy: input.accuracy ?? null,
+    // 段によって求めるスコアが変わる種目（サッケイド）があるので、
+    // そのとき課されていた段も渡す。
+    level: input.level,
   })
 }
 

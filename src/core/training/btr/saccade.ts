@@ -1,22 +1,30 @@
-import { createRandom, hashString } from '../../util/seeded-shuffle'
+import { hashString } from '../../util/seeded-shuffle'
 
 /**
  * サッケイド（BTRメソッド 認知視野拡大）
  *
- * 上下（たて）または左右（よこ）のマーカー間で視線を往復させる。
- * 文字を介在させず、眼球運動だけに集中するのがこの種目の核心である。
+ * 実物のシート（PRESIDENT Family 掲載のもの）は、**印だけが並んだ紙**である。
  *
- * 教室では紙のシートを見て自分で往復数を数えるが、アプリで自己申告にすると
- * 数字だけが上がって訓練にならない。そのため次の形に置き換えている。
+ *   たて  8本の縦線。各線の上端に ▼、下端に ▲
+ *   よこ  8本の横線。各線の左端に ▶、右端に ◀
  *
- *   マーカーが交互に点灯する → 点灯した側を答える → 正答数を往復数とする
+ * 線は点線で、途中には何も書かれていない。**文字を一切介在させない。**
+ * 端から端へ視線を往復させ、30秒で何往復できたかを数える。
  *
- * 点灯側を知るには視線を動かすほかないので眼球運動は実際に起きる。
- * 「往復数」の絶対値は教室のスコアとは比較できない。比較するのは自分の推移だけ。
+ * 向きは毎回ランダムに切り替わる（たて／よこの2種類）。
+ *
+ * ## 数え方について
+ *
+ * 教室では自分で往復数を数える。アプリでも同じにしてある。
+ * 一度は「印が交互に点灯して、光った側を答える」形にしていたが、これは誤りだった。
+ * 点灯を待って反応する課題になると、速さの上限が**反応時間**で決まってしまい、
+ * 自分のペースで最速の眼球運動をするというこの種目の中身が消える。
+ *
+ * 自己申告なので数字は盛れる。それは紙のシートでも同じである。
+ * 比べるのは自分の推移だけにする。
  */
 
 export type SaccadeAxis = 'vertical' | 'horizontal'
-export type SaccadeSide = 'start' | 'end'
 
 export const SACCADE_AXES: readonly SaccadeAxis[] = ['vertical', 'horizontal']
 
@@ -24,6 +32,21 @@ export const SACCADE_AXIS_LABELS: Record<SaccadeAxis, string> = {
   vertical: 'たてサッケイド',
   horizontal: 'よこサッケイド',
 }
+
+export const SACCADE = {
+  /** 1本の長さ（ms） */
+  durationMs: 30_000,
+  /** シートの線の本数。たては8列、よこは8行。 */
+  lines: 8,
+  /**
+   * 段ごとの1往復あたりの目安時間（ms）。短くなるほど上の段。
+   *
+   * 級を判定するための目安であって、この速さに合わせて動かすものではない。
+   * 公開スコアが30秒で50〜80往復なので、そこから逆算して置いた。
+   * **教室が段を設けているかは確認できていない。**
+   */
+  intervalsMs: [700, 600, 500, 420, 360, 300],
+} as const
 
 /**
  * その回に行う向き。
@@ -36,116 +59,58 @@ export function saccadeAxisFor(seed: string): SaccadeAxis {
   return SACCADE_AXES[index] ?? 'horizontal'
 }
 
-export interface SaccadeStep {
-  /** 何番目の点灯か（0 始まり） */
-  readonly index: number
-  /** どちら側が光るか */
-  readonly side: SaccadeSide
-  /** 点灯を始める時刻（ブロック開始からの ms） */
-  readonly atMs: number
-}
-
-export const SACCADE = {
-  /** 1本の長さ（ms） */
-  durationMs: 30_000,
-  /**
-   * 段ごとの点灯間隔（ms）。短くなるほど上の段。
-   *
-   * 700ms は目で追って余裕がある速さ、300ms は先読みしないと追いつかない速さ。
-   * 教室の紙のシートには点灯がないので、この刻みはこちらで置いたものである。
-   */
-  intervalsMs: [700, 600, 500, 420, 360, 300],
-} as const
-
-export interface SaccadeSchedule {
-  readonly axis: SaccadeAxis
-  readonly intervalMs: number
-  readonly durationMs: number
-  readonly steps: readonly SaccadeStep[]
-}
-
-export interface BuildSaccadeScheduleInput {
-  readonly axis: SaccadeAxis
-  /** 点灯の間隔（ms）。レベルが上がるほど短くなる。 */
-  readonly intervalMs: number
-  /** ブロックの長さ（ms） */
-  readonly durationMs: number
-  /** 左右どちらから始めるかを決める種 */
-  readonly seed: string
+export interface SaccadeResult {
+  /** 往復数。これが記録するスコア。 */
+  readonly laps: number
+  /** シートを何周したか（8本を通し終えた回数） */
+  readonly sheets: number
+  /** 周回の途中で、いま何本目にいるか（0 始まり） */
+  readonly line: number
+  /** 実際に測った長さ（ms） */
+  readonly elapsedMs: number
+  /** 1分あたりに直した往復数。長さを変えても比べられるようにする。 */
+  readonly perMinute: number
 }
 
 /**
- * 点灯の予定表を作る。
+ * 往復数から成績を出す。
  *
- * 単純な交互ではなく、ときどき同じ側が連続する。
- * 完全な交互だと目を閉じていてもリズムだけで当てられてしまい、
- * 「見て判断する」課題でなくなるため。
+ * 数えるのは往復そのもので、周回数は「いま何本目か」を画面に出すための内訳である。
+ * 8本を通し終えるごとに1周になる。
  */
-export function buildSaccadeSchedule(input: BuildSaccadeScheduleInput): SaccadeSchedule {
-  const { axis, intervalMs, durationMs, seed } = input
-  if (intervalMs <= 0 || durationMs <= 0) {
-    return { axis, intervalMs, durationMs, steps: [] }
-  }
+export function scoreSaccade(laps: number, elapsedMs: number): SaccadeResult {
+  const safeLaps = Math.max(0, Math.floor(laps))
+  const lines = Math.max(1, SACCADE.lines)
 
-  const random = createRandom(hashString(`${seed}:${axis}`))
-  const count = Math.floor(durationMs / intervalMs)
-  const steps: SaccadeStep[] = []
-  let side: SaccadeSide = random() < 0.5 ? 'start' : 'end'
-
-  for (let index = 0; index < count; index += 1) {
-    steps.push({ index, side, atMs: index * intervalMs })
-    // 8回に1回ほど同じ側にとどめ、リズムだけで当たらないようにする。
-    if (random() >= 0.125) side = side === 'start' ? 'end' : 'start'
-  }
-
-  return { axis, intervalMs, durationMs, steps }
-}
-
-export interface SaccadeAnswer {
-  readonly index: number
-  readonly side: SaccadeSide
-}
-
-export interface SaccadeResult {
-  /** 正しく答えられた回数。これを往復数として記録する。 */
-  readonly hits: number
-  /** 誤った側を答えた回数 */
-  readonly misses: number
-  /** 答えないまま過ぎた回数 */
-  readonly skipped: number
-  /** 出題数 */
-  readonly total: number
-  /** 正答率（0–100）。レベルを上げてよいかの判断に使う。 */
-  readonly accuracy: number
-}
-
-/** 点灯の予定表と回答から往復数を出す。 */
-export function scoreSaccade(
-  schedule: SaccadeSchedule,
-  answers: readonly SaccadeAnswer[],
-): SaccadeResult {
-  const bySide = new Map<number, SaccadeSide>()
-  // 同じ点灯に複数回答えた場合は最初のものだけを採る（連打で稼げないようにする）。
-  for (const answer of answers) {
-    if (!bySide.has(answer.index)) bySide.set(answer.index, answer.side)
-  }
-
-  let hits = 0
-  let misses = 0
-  for (const step of schedule.steps) {
-    const answered = bySide.get(step.index)
-    if (answered === undefined) continue
-    if (answered === step.side) hits += 1
-    else misses += 1
-  }
-
-  const total = schedule.steps.length
-  const answered = hits + misses
   return {
-    hits,
-    misses,
-    skipped: total - answered,
-    total,
-    accuracy: answered === 0 ? 0 : Math.round((hits / answered) * 100),
+    laps: safeLaps,
+    sheets: Math.floor(safeLaps / lines),
+    line: safeLaps % lines,
+    elapsedMs,
+    perMinute:
+      elapsedMs <= 0 ? 0 : Math.round((safeLaps / (elapsedMs / 60_000)) * 10) / 10,
   }
+}
+
+export interface SaccadeLine {
+  /** 何本目か（0 始まり） */
+  readonly index: number
+  /** 線の位置（0–1）。たてなら左からの位置、よこなら上からの位置。 */
+  readonly offset: number
+}
+
+/**
+ * シートの線。
+ *
+ * 等間隔に並べる。実物も等間隔で、間隔そのものに意味はない
+ * （視線を動かす距離を一定に保つためのもの）。
+ */
+export function buildSaccadeSheet(lines: number = SACCADE.lines): SaccadeLine[] {
+  const count = Math.max(0, Math.floor(lines))
+  if (count === 0) return []
+  return Array.from({ length: count }, (_, index) => ({
+    index,
+    // 両端に余白を残す。端に寄せると印が画面のふちに触れて見づらい。
+    offset: count === 1 ? 0.5 : index / (count - 1),
+  }))
 }
