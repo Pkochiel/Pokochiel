@@ -5,7 +5,7 @@ import { NUMBER_RANDOM } from './number-random'
 import { PATTERN_SHEET } from './pattern-sheet'
 import { SACCADE } from './saccade'
 import { SPEED_BOARD } from './speed-board'
-import { SPEED_CHECK } from './sheets'
+import { SPEED_CHECK } from './speed-check'
 import { UNIT_BOOK } from './unit-book'
 import { btrExercise, type BtrExercise } from './exercises'
 
@@ -113,12 +113,15 @@ export const LEVEL_RULES: Partial<Record<BtrExercise, LevelRule>> = {
     fallbackAccuracy: BP_SHEET.fallbackAccuracy,
   },
   speed_check: {
-    timeLimits: [SPEED_CHECK.turnMs, 45_000, 35_000, 30_000, 25_000],
-    // 盤には10個ある。全部拾えたら次の段へ。
-    advanceScore: 10,
-    advanceAccuracy: 90,
-    fallbackScore: 5,
-    fallbackAccuracy: 60,
+    // 出題数（30問）は据え置きで、制限時間だけが縮む。
+    // 段が上がるほど1問にかけられる時間が短くなる。
+    timeLimits: SPEED_CHECK.timeLimits,
+    // 正答率の分母は全問なので、時間内に処理しきれなければ届かない。
+    // 主スコア（正解数）を別に見なくても、速さと正確さの両方が入っている。
+    advanceScore: 0,
+    advanceAccuracy: SPEED_CHECK.advanceAccuracy,
+    fallbackScore: 0,
+    fallbackAccuracy: SPEED_CHECK.fallbackAccuracy,
   },
   logical_test: {
     timeLimits: LOGICAL_TEST.timeLimits,

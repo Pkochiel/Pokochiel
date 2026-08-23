@@ -103,7 +103,7 @@ BTR の種目とはしご：
 
 ```
 core/training/btr/saccade.test.ts            往復の数え方・たてよこの切り替え・重複押下
-core/training/btr/visual-search.test.ts      盤面の生成・見落とし・押し間違い
+core/training/btr/speed-check.test.ts        毎問違うお題・1字違いを全部並べること・正答率の分母
 core/training/btr/number-random.test.ts      1から順に拾う判定・複数枚の合成
 core/training/btr/pattern-sheet.test.ts      縦書き80列の盤面・発見数と到達列
 core/training/btr/bp-sheet.test.ts           現れて消える時刻・消えた字を押せないこと

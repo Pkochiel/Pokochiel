@@ -95,16 +95,25 @@ describe('judgeBtr', () => {
   })
 
   it('両方を課す種目は片方だけでは上がらない', () => {
+    // 漢数字一行は3ターンで240個。上がるのに144個かつ90%が要る。
     // 正確さだけ見ると、ゆっくり確実に拾って100%を保つ人が上がりつづける。
-    expect(judgeBtr('speed_check', { score: 6, accuracy: 100 })).toBe('stay')
+    expect(judgeBtr('pattern_sheet', { score: 100, accuracy: 100 })).toBe('stay')
     // 主スコアだけ見ると、当てずっぽうで数を稼ぐ人が上がってしまう。
-    expect(judgeBtr('speed_check', { score: 10, accuracy: 70 })).toBe('stay')
-    expect(judgeBtr('speed_check', { score: 10, accuracy: 100 })).toBe('advance')
+    expect(judgeBtr('pattern_sheet', { score: 200, accuracy: 70 })).toBe('stay')
+    expect(judgeBtr('pattern_sheet', { score: 200, accuracy: 100 })).toBe('advance')
+  })
+
+  it('正答率だけで見る種目', () => {
+    // スピードチェックは正答率の分母が全問なので、時間内に処理しきれなければ
+    // その時点で正答率が落ちる。速さと正確さの両方がひとつの数字に入っている。
+    expect(judgeBtr('speed_check', { score: 27, accuracy: 90 })).toBe('advance')
+    expect(judgeBtr('speed_check', { score: 24, accuracy: 80 })).toBe('stay')
   })
 
   it('下限を割れば下がる', () => {
-    expect(judgeBtr('speed_check', { score: 3, accuracy: 100 })).toBe('fallback')
-    expect(judgeBtr('speed_check', { score: 10, accuracy: 40 })).toBe('fallback')
+    expect(judgeBtr('pattern_sheet', { score: 30, accuracy: 100 })).toBe('fallback')
+    expect(judgeBtr('pattern_sheet', { score: 200, accuracy: 40 })).toBe('fallback')
+    expect(judgeBtr('speed_check', { score: 18, accuracy: 60 })).toBe('fallback')
   })
 
   it('正確さを見る種目に正確さが来なければ上げない', () => {

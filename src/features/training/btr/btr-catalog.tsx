@@ -69,7 +69,7 @@ const SUMMARIES: Record<BtrExercise, string> = {
   unit_book: 'よく似た8つの文から、お題の文を探す',
   pattern_sheet: '縦書き80列から対象の漢数字を探す。3ターン',
   bp_sheet: '動きの中で文字を判別する',
-  speed_check: '方角漢字の組み合わせから対象を探す',
+  speed_check: '方角漢字3文字の並びから、お題と同じものを探す。30問',
   kana_pickup: '物語を読みながら、あ・い・う・え・お を拾う',
   logical_test: '前提から結論が導けるかを判定する。30問',
   speed_board: '5×5 の盤で、真ん中からの移動の行き先を指す',
