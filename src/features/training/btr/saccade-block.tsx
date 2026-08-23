@@ -6,6 +6,7 @@ import {
   SACCADE_AXIS_LABELS,
   buildSaccadeSheet,
   saccadeAxisFor,
+  saccadeLapMs,
   scoreSaccade,
   type SaccadeAxis,
 } from '@/core/training/btr/saccade'
@@ -21,8 +22,8 @@ import type { BtrBlockProps } from './shared/btr-block'
  * 実物のシートと同じ形を出す。点線が8本並び、端に印があるだけで、
  * 途中には何も書かれていない。**文字を一切介在させない。**
  *
- * 端から端へ視線を往復させ、1本終えるごとに画面を押す。
- * 押した回数がそのまま往復数になる。
+ * **1往復 = 8本を通し終えること。** 1本ずつ端から端へ視線を送り、
+ * 8本すべてを通ったところで画面を押す。押した回数が往復数になる。
  *
  * 自己申告なので数字は盛れるが、それは紙のシートでも同じである。
  * 「印が光った側を答える」形にすると検証はできるが、速さの上限が反応時間で
@@ -70,9 +71,11 @@ export function SaccadeBlock({ seed, level = 0, onComplete }: SaccadeBlockProps)
       >
         <p>
           {axis === 'vertical' ? '縦' : '横'}線が {lines.length} 本並びます。
+          1本ずつ端から端へ視線を送り、
           <strong className="text-fg">
-            線の端から端へ視線を往復させ、1本終えるごとに画面を押してください。
+            {lines.length} 本すべてを通ったところで画面を押してください。
           </strong>
+          それで1往復です。
         </p>
         <p>
           文字はありません。読もうとせず、印から印へ目だけを飛ばしてください。
@@ -84,9 +87,9 @@ export function SaccadeBlock({ seed, level = 0, onComplete }: SaccadeBlockProps)
           </p>
         ) : null}
         <p className="text-xs">
-          {Math.round(SACCADE.durationMs / 1000)} 秒。
-          いまの級の目安は1往復 {targetIntervalMs} ミリ秒（
-          {Math.round(SACCADE.durationMs / targetIntervalMs)} 往復）です。
+          {Math.round(SACCADE.durationMs / 1000)} 秒。いまの級の目安は
+          1本 {targetIntervalMs} ミリ秒（
+          {Math.round(SACCADE.durationMs / saccadeLapMs(targetIntervalMs))} 往復）です。
         </p>
       </BtrIntro>
     )
@@ -103,7 +106,6 @@ export function SaccadeBlock({ seed, level = 0, onComplete }: SaccadeBlockProps)
         <SaccadeSheet
           axis={axis}
           lines={lines}
-          activeLine={laps % lines.length}
           laps={laps}
           onLap={() => setLaps((current) => current + 1)}
         />
@@ -119,7 +121,8 @@ export function SaccadeBlock({ seed, level = 0, onComplete }: SaccadeBlockProps)
         </p>
         <h2 className="mt-3 text-lg font-medium sm:text-xl">往復数を確かめてください</h2>
         <p className="mt-3 text-sm leading-relaxed text-fg-muted">
-          押した回数を数えています。数え落としや押しすぎがあれば直してください。
+          {lines.length} 本を通し終えるごとに1往復です。押した回数を数えています。
+          数え落としや押しすぎがあれば直してください。
         </p>
 
         <div className="mt-6 flex items-center gap-4">
@@ -156,7 +159,8 @@ export function SaccadeBlock({ seed, level = 0, onComplete }: SaccadeBlockProps)
       score={result.laps}
       scoreUnit="往復"
       lines={[
-        { label: 'シートの周回', value: `${result.sheets} 周` },
+        { label: '視線を送った本数', value: `${result.lineTraversals} 本` },
+        { label: '1本あたり', value: `${result.msPerLine} ミリ秒` },
         { label: '1分あたり', value: `${result.perMinute} 往復` },
       ]}
       note="自分で数えた数字です。紙のシートと同じで、比べるのは自分の推移だけにしてください。"
@@ -177,7 +181,6 @@ export function SaccadeBlock({ seed, level = 0, onComplete }: SaccadeBlockProps)
 interface SaccadeSheetProps {
   readonly axis: SaccadeAxis
   readonly lines: readonly { index: number; offset: number }[]
-  readonly activeLine: number
   readonly laps: number
   readonly onLap: () => void
 }
@@ -188,7 +191,7 @@ interface SaccadeSheetProps {
  * 画面全体を押せるようにする。1往復ごとに押すので、狙って押す余裕はない
  * （狙わせると、目ではなく指の動きを測ることになる）。
  */
-function SaccadeSheet({ axis, lines, activeLine, laps, onLap }: SaccadeSheetProps) {
+function SaccadeSheet({ axis, lines, laps, onLap }: SaccadeSheetProps) {
   const vertical = axis === 'vertical'
 
   return (
@@ -199,36 +202,35 @@ function SaccadeSheet({ axis, lines, activeLine, laps, onLap }: SaccadeSheetProp
           event.preventDefault()
           onLap()
         }}
-        aria-label="1往復ぶん進める"
+        aria-label="1往復ぶん数える"
         className="flex flex-1 w-full flex-col px-4 pt-14 pb-6 select-none sm:px-8"
       >
         <div className="relative flex-1 rounded-2xl border border-border bg-surface">
         {lines.map((line) => {
-          const active = line.index === activeLine
           // たては上下に、よこは左右に印を置く。線そのものは点線。
+          // どの線も同じ見た目にする。押すのは8本を通し終えたときなので、
+          // 「いま何本目か」はアプリからは分からない（紙のシートと同じ）。
           const position = `${8 + line.offset * 84}%`
           return (
             <div
               key={line.index}
               style={vertical ? { left: position } : { top: position }}
               className={cn(
-                'absolute',
+                'absolute border-dashed border-border',
                 vertical
                   ? 'top-[8%] bottom-[8%] -translate-x-1/2 border-l'
                   : 'inset-x-[8%] -translate-y-1/2 border-t',
-                active ? 'border-dashed border-brand' : 'border-dashed border-border',
               )}
             >
-              <Marker axis={axis} at="start" active={active} />
-              <Marker axis={axis} at="end" active={active} />
+              <Marker axis={axis} at="start" />
+              <Marker axis={axis} at="end" />
             </div>
           )
         })}
         </div>
 
         <p className="mt-4 text-center text-sm text-fg-muted">
-          <span className="tabular text-2xl font-semibold text-fg">{laps}</span> 往復・
-          {activeLine + 1} 本目
+          <span className="tabular text-2xl font-semibold text-fg">{laps}</span> 往復
         </p>
       </button>
     </main>
@@ -244,15 +246,7 @@ function SaccadeSheet({ axis, lines, activeLine, laps, onLap }: SaccadeSheetProp
  * CSS の枠線で三角を作らず SVG にしてあるのは、向きと色の組み合わせが
  * 4通りあり、クラス名を組み立てる書き方だと Tailwind が拾えないため。
  */
-function Marker({
-  axis,
-  at,
-  active,
-}: {
-  axis: SaccadeAxis
-  at: 'start' | 'end'
-  active: boolean
-}) {
+function Marker({ axis, at }: { axis: SaccadeAxis; at: 'start' | 'end' }) {
   const vertical = axis === 'vertical'
 
   // 内側を指す三角。たては ▼（上端）と ▲（下端）、よこは ▶（左端）と ◀（右端）。
@@ -269,8 +263,7 @@ function Marker({
       viewBox="0 0 18 18"
       aria-hidden
       className={cn(
-        'absolute size-[18px]',
-        active ? 'text-brand' : 'text-fg',
+        'absolute size-[18px] text-fg',
         vertical
           ? at === 'start'
             ? '-top-[18px] -left-[9px]'

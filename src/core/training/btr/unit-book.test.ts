@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { UNIT_BOOK, UNIT_TEMPLATES, buildUnitBookQuestions, scoreUnitBook } from './unit-book'
+import { UNIT_BOOK, UNIT_TEMPLATES, buildUnitBookSet, scoreUnitBook } from './unit-book'
 
-const questions = (seed = 'day') => buildUnitBookQuestions({ seed })
+const set = (seed = 'day') => buildUnitBookSet({ seed })
+const questions = (seed = 'day') => set(seed).questions
 
 describe('文の型', () => {
   it('どの型も差し替え箇所を3つ持つ', () => {
@@ -21,7 +22,7 @@ describe('文の型', () => {
   })
 })
 
-describe('buildUnitBookQuestions', () => {
+describe('buildUnitBookSet', () => {
   it('設定どおりの問数を作る', () => {
     expect(questions()).toHaveLength(UNIT_BOOK.questionCount)
   })
@@ -46,9 +47,26 @@ describe('buildUnitBookQuestions', () => {
   })
 
   it('お題が正解の列の文と一致する', () => {
-    for (const question of questions()) {
-      expect(question.columns[question.answerPosition]?.text).toBe(question.target)
+    const built = set()
+    for (const question of built.questions) {
+      expect(question.columns[question.answerPosition]?.text).toBe(built.target)
     }
+  })
+
+  it('お題が1セットのあいだ変わらない', () => {
+    // 毎問お題を読み直す形にすると、探す時間より読む時間のほうが長くなり、
+    // 「見つける速さ」を測れなくなる。
+    const built = set()
+    expect(built.target).not.toBe('')
+    // お題は列のどれかであり、どの問題でもその文が必ず含まれる。
+    for (const question of built.questions) {
+      expect(question.columns.map((column) => column.text)).toContain(built.target)
+    }
+  })
+
+  it('お題は列のいずれかの文である', () => {
+    const built = set()
+    expect(built.questions[0]!.columns.map((c) => c.text)).toContain(built.target)
   })
 
   it('どの2列も1〜3か所しか違わない', () => {
@@ -80,15 +98,19 @@ describe('buildUnitBookQuestions', () => {
   })
 
   it('同じ種なら同じ出題になる', () => {
-    expect(questions('x')).toEqual(questions('x'))
+    expect(set('x')).toEqual(set('x'))
   })
 
   it('種が変われば出題が変わる', () => {
-    expect(questions('x')).not.toEqual(questions('y'))
+    expect(set('x')).not.toEqual(set('y'))
   })
 
   it('問数が 0 以下なら出題しない', () => {
-    expect(buildUnitBookQuestions({ seed: 'day', count: 0 })).toEqual([])
+    expect(buildUnitBookSet({ seed: 'day', count: 0 }).questions).toEqual([])
+  })
+
+  it('同じ種なら同じお題になる', () => {
+    expect(set('x').target).toBe(set('x').target)
   })
 })
 

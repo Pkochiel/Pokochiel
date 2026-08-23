@@ -9,7 +9,9 @@ import { hashString } from '../../util/seeded-shuffle'
  *   よこ  8本の横線。各線の左端に ▶、右端に ◀
  *
  * 線は点線で、途中には何も書かれていない。**文字を一切介在させない。**
- * 端から端へ視線を往復させ、30秒で何往復できたかを数える。
+ *
+ * **1往復 = 8本を通し終えること。** 1本ずつ端から端へ視線を送り、
+ * 8本すべてを通ったところで1往復と数える。30秒で何往復できたかが成績になる。
  *
  * 向きは毎回ランダムに切り替わる（たて／よこの2種類）。
  *
@@ -36,17 +38,22 @@ export const SACCADE_AXIS_LABELS: Record<SaccadeAxis, string> = {
 export const SACCADE = {
   /** 1本の長さ（ms） */
   durationMs: 30_000,
-  /** シートの線の本数。たては8列、よこは8行。 */
+  /** シートの線の本数。たては8列、よこは8行。1往復はこの本数を通すこと。 */
   lines: 8,
   /**
-   * 段ごとの1往復あたりの目安時間（ms）。短くなるほど上の段。
+   * 段ごとの **1本あたり** の目安時間（ms）。短くなるほど上の段。
    *
+   * 1往復は8本ぶんなので、求める往復数は 30秒 ÷（この値 × 8）になる。
    * 級を判定するための目安であって、この速さに合わせて動かすものではない。
-   * 公開スコアが30秒で50〜80往復なので、そこから逆算して置いた。
    * **教室が段を設けているかは確認できていない。**
    */
   intervalsMs: [700, 600, 500, 420, 360, 300],
 } as const
+
+/** その段で1往復にかける目安の時間（ms）。8本ぶん。 */
+export function saccadeLapMs(intervalMs: number): number {
+  return intervalMs * SACCADE.lines
+}
 
 /**
  * その回に行う向き。
@@ -60,35 +67,36 @@ export function saccadeAxisFor(seed: string): SaccadeAxis {
 }
 
 export interface SaccadeResult {
-  /** 往復数。これが記録するスコア。 */
+  /** 往復数。8本を通し終えた回数。これが記録するスコア。 */
   readonly laps: number
-  /** シートを何周したか（8本を通し終えた回数） */
-  readonly sheets: number
-  /** 周回の途中で、いま何本目にいるか（0 始まり） */
-  readonly line: number
+  /** 視線を送った本数（往復数 × 8）。1本あたりの速さを見るのに使う。 */
+  readonly lineTraversals: number
   /** 実際に測った長さ（ms） */
   readonly elapsedMs: number
   /** 1分あたりに直した往復数。長さを変えても比べられるようにする。 */
   readonly perMinute: number
+  /** 1本あたりにかかった時間（ms）。段の目安と直に比べられる。 */
+  readonly msPerLine: number
 }
 
 /**
  * 往復数から成績を出す。
  *
- * 数えるのは往復そのもので、周回数は「いま何本目か」を画面に出すための内訳である。
- * 8本を通し終えるごとに1周になる。
+ * 1往復は8本ぶん。1本あたりの時間も一緒に出すのは、
+ * 級の目安（段ごとの1本あたりの時間）と直に比べられるようにするため。
  */
 export function scoreSaccade(laps: number, elapsedMs: number): SaccadeResult {
   const safeLaps = Math.max(0, Math.floor(laps))
-  const lines = Math.max(1, SACCADE.lines)
+  const lineTraversals = safeLaps * SACCADE.lines
 
   return {
     laps: safeLaps,
-    sheets: Math.floor(safeLaps / lines),
-    line: safeLaps % lines,
+    lineTraversals,
     elapsedMs,
     perMinute:
       elapsedMs <= 0 ? 0 : Math.round((safeLaps / (elapsedMs / 60_000)) * 10) / 10,
+    msPerLine:
+      lineTraversals === 0 || elapsedMs <= 0 ? 0 : Math.round(elapsedMs / lineTraversals),
   }
 }
 

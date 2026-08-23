@@ -6,6 +6,10 @@ import { createRandom, hashString, seededShuffle } from '../../util/seeded-shuff
  * 縦一行のユニットが8列並ぶ。どれもよく似た文で、位置は毎回入れ替わる。
  * お題の文がどの列にあるかを、どれだけ速く見つけられるかを見る。正解数で級を判定する。
  *
+ * **お題は1セットのあいだ変わらない。** 変わるのは列の並びだけである。
+ * 毎問お題を読み直す形にすると、探す時間より読む時間のほうが長くなり、
+ * 「見つける速さ」を測れなくなる。
+ *
  * 例（教室で使われている形）：
  *
  *   おじいさんは山へ芝刈りに行きました。
@@ -104,10 +108,16 @@ export interface UnitBookQuestion {
   readonly id: string
   /** 画面に並べる順。position はこの並びの添字と一致する。 */
   readonly columns: readonly UnitBookColumn[]
-  /** 探す文 */
-  readonly target: string
   /** 正解の列 */
   readonly answerPosition: number
+}
+
+export interface UnitBookSet {
+  /** 使った文の型 */
+  readonly templateId: string
+  /** 探す文。**1セットのあいだ変わらない。** */
+  readonly target: string
+  readonly questions: readonly UnitBookQuestion[]
 }
 
 /** 3つの二択の総当たり。8通りを固定の順で返す。 */
@@ -127,32 +137,34 @@ export interface BuildUnitBookInput {
 }
 
 /**
- * 出題を作る。
+ * 1セットぶんの出題を作る。
  *
- * 1問ごとに文の型を選び、8通りを作って並びを入れ替える。
- * 並びが毎回変わるので、位置を覚えて答えることはできない。
+ * 文の型とお題は**セットの最初に1度だけ**決める。以降の問題で変わるのは
+ * 列の並びだけで、並びが毎回変わるので位置を覚えて答えることはできない。
  */
-export function buildUnitBookQuestions(input: BuildUnitBookInput): UnitBookQuestion[] {
+export function buildUnitBookSet(input: BuildUnitBookInput): UnitBookSet {
   const { seed, count = UNIT_BOOK.questionCount } = input
-  if (count <= 0 || UNIT_TEMPLATES.length === 0) return []
-
   const random = createRandom(hashString(`${seed}:unit-book`))
-  const combos = allChoices()
+  const template =
+    UNIT_TEMPLATES[Math.floor(random() * UNIT_TEMPLATES.length)] ?? UNIT_TEMPLATES[0]
 
-  return Array.from({ length: count }, (_, index): UnitBookQuestion => {
-    const template =
-      UNIT_TEMPLATES[Math.floor(random() * UNIT_TEMPLATES.length)] ?? UNIT_TEMPLATES[0]!
-    const texts = combos.map((choices) => template.build(choices))
+  if (count <= 0 || template === undefined) {
+    return { templateId: template?.id ?? '', target: '', questions: [] }
+  }
+
+  const texts = allChoices().map((choices) => template.build(choices))
+  const target = texts[Math.floor(random() * texts.length)] ?? texts[0]!
+
+  const questions = Array.from({ length: count }, (_, index): UnitBookQuestion => {
     const shuffled = seededShuffle(texts, `${seed}:unit-book:${index}`)
-    const answerPosition = Math.floor(random() * shuffled.length)
-
     return {
       id: `ub-${index + 1}`,
       columns: shuffled.map((text, position) => ({ position, text })),
-      target: shuffled[answerPosition] ?? shuffled[0] ?? '',
-      answerPosition,
+      answerPosition: shuffled.indexOf(target),
     }
   })
+
+  return { templateId: template.id, target, questions }
 }
 
 export interface UnitBookResult {

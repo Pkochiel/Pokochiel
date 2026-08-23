@@ -5,6 +5,7 @@ import {
   SACCADE_AXIS_LABELS,
   buildSaccadeSheet,
   saccadeAxisFor,
+  saccadeLapMs,
   scoreSaccade,
 } from './saccade'
 
@@ -69,31 +70,31 @@ describe('buildSaccadeSheet', () => {
 
 describe('scoreSaccade', () => {
   it('往復数をそのままスコアにする', () => {
-    expect(scoreSaccade(57, SACCADE.durationMs).laps).toBe(57)
+    expect(scoreSaccade(7, SACCADE.durationMs).laps).toBe(7)
   })
 
-  it('8本ごとに1周と数える', () => {
-    const result = scoreSaccade(19, SACCADE.durationMs)
-    expect(result.sheets).toBe(2)
-    expect(result.line).toBe(3)
+  it('1往復は8本ぶん', () => {
+    // 1本ずつ端から端へ送り、8本すべてを通ったところで1往復。
+    expect(scoreSaccade(7, SACCADE.durationMs).lineTraversals).toBe(7 * SACCADE.lines)
   })
 
-  it('ちょうど1周なら次の周の先頭に戻る', () => {
-    const result = scoreSaccade(8, SACCADE.durationMs)
-    expect(result.sheets).toBe(1)
-    expect(result.line).toBe(0)
+  it('1本あたりの時間を出す', () => {
+    // 段の目安（1本あたりの時間）と直に比べられるようにする。
+    // 30秒で6往復 = 48本 → 625ms/本。
+    expect(scoreSaccade(6, 30_000).msPerLine).toBe(625)
   })
 
   it('1分あたりに直した数も出す', () => {
     // 長さを変えても比べられるようにする。
-    expect(scoreSaccade(30, 30_000).perMinute).toBe(60)
+    expect(scoreSaccade(6, 30_000).perMinute).toBe(12)
   })
 
   it('0 往復でも落ちない', () => {
     const result = scoreSaccade(0, SACCADE.durationMs)
     expect(result.laps).toBe(0)
-    expect(result.sheets).toBe(0)
+    expect(result.lineTraversals).toBe(0)
     expect(result.perMinute).toBe(0)
+    expect(result.msPerLine).toBe(0)
   })
 
   it('負や小数は切り詰める', () => {
@@ -115,11 +116,18 @@ describe('段の刻み', () => {
     }
   })
 
-  it('公開スコアの範囲と噛み合っている', () => {
-    // 30秒で50〜80往復という数字から逆算した刻みになっていること。
-    const fastest = SACCADE.intervalsMs[SACCADE.intervalsMs.length - 1]!
-    const slowest = SACCADE.intervalsMs[0]!
-    expect(SACCADE.durationMs / fastest).toBeGreaterThanOrEqual(80)
-    expect(SACCADE.durationMs / slowest).toBeLessThanOrEqual(50)
+  it('1往復は8本ぶんの時間になる', () => {
+    for (const interval of SACCADE.intervalsMs) {
+      expect(saccadeLapMs(interval)).toBe(interval * SACCADE.lines)
+    }
+  })
+
+  it('どの段も30秒で数往復はできる刻みになっている', () => {
+    // 1往復に30秒近くかかる刻みだと、30秒の中で数えるものがなくなる。
+    for (const interval of SACCADE.intervalsMs) {
+      const laps = SACCADE.durationMs / saccadeLapMs(interval)
+      expect(laps).toBeGreaterThanOrEqual(3)
+      expect(laps).toBeLessThanOrEqual(20)
+    }
   })
 })

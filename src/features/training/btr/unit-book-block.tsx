@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   UNIT_BOOK,
-  buildUnitBookQuestions,
+  buildUnitBookSet,
   scoreUnitBook,
 } from '@/core/training/btr/unit-book'
 import { cn } from '@/lib/cn'
@@ -14,9 +14,14 @@ import type { BtrBlockProps } from './shared/btr-block'
 /**
  * ユニットブック（BTRメソッド 認知視野拡大）
  *
- * よく似た8つの文が縦一行ずつ並ぶ。お題の文がどの列にあるかを探す。
+ * よく似た8つの文が **縦書きで横に並ぶ**（縦一行ユニット）。
+ * お題の文がどの列にあるかを探す。
+ *
  * どの2列も1〜3か所しか違わないので、拾い読みでは当たらない。
  * 文の頭だけ見て決めると外れるところがこの種目の要点である。
+ *
+ * **お題は1セットのあいだ変わらない。** 変わるのは列の並びだけ。
+ * 毎問お題を読み直す形にすると、探す時間より読む時間のほうが長くなる。
  */
 
 export type UnitBookBlockProps = BtrBlockProps
@@ -28,7 +33,7 @@ export function UnitBookBlock({ seed, level = 0, onComplete }: UnitBookBlockProp
   const [index, setIndex] = useState(0)
   const [feedback, setFeedback] = useState<{ position: number; correct: boolean } | null>(null)
 
-  const questions = useMemo(() => buildUnitBookQuestions({ seed }), [seed])
+  const { target, questions } = useMemo(() => buildUnitBookSet({ seed }), [seed])
   const timeLimitMs =
     UNIT_BOOK.timeLimits[Math.min(level, UNIT_BOOK.timeLimits.length - 1)] ??
     UNIT_BOOK.timeLimits[0]!
@@ -103,18 +108,28 @@ export function UnitBookBlock({ seed, level = 0, onComplete }: UnitBookBlockProp
           progress={countdown.progress}
           detail={`${index + 1} / ${questions.length} 問`}
         />
-        <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col justify-center px-5 pt-14 pb-6 sm:px-8">
-          <p className="text-xs text-fg-muted">この文を探す</p>
-          <p className="mt-2 rounded-xl border border-brand bg-brand-soft px-4 py-3 text-base font-medium">
-            {question.target}
-          </p>
+        <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col justify-center gap-5 px-3 pt-14 pb-6 sm:px-6">
+          <div>
+            <p className="text-xs text-fg-muted">この文を探す（セットのあいだ変わりません）</p>
+            <p className="mt-2 rounded-xl border border-brand bg-brand-soft px-4 py-3 text-base font-medium">
+              {target}
+            </p>
+          </div>
 
-          <ul className="mt-6 space-y-1.5">
+          {/*
+            8列を横に並べ、文は縦書きにする。実物が「縦一行ユニット」で、
+            同じような文が8列並ぶ形をしている。
+
+            CSS の writing-mode を使わず、1文字ずつ縦に積んでいる。
+            writing-mode に頼ると、縦組みの字送り情報を持たないフォントに
+            当たったときに漢字が同じ位置に重なって出てしまう。
+          */}
+          <ul className="flex items-stretch justify-center gap-1 sm:gap-2">
             {question.columns.map((column) => {
               const chosen = feedback?.position === column.position
               const isAnswer = column.position === question.answerPosition
               return (
-                <li key={column.position}>
+                <li key={column.position} className="flex-1">
                   <button
                     type="button"
                     onPointerDown={(event) => {
@@ -122,8 +137,8 @@ export function UnitBookBlock({ seed, level = 0, onComplete }: UnitBookBlockProp
                       answer(column.position)
                     }}
                     className={cn(
-                      'w-full rounded-xl border px-4 py-3 text-left text-sm leading-relaxed',
-                      'transition-colors select-none',
+                      'flex w-full flex-col items-center rounded-xl border px-1 py-4',
+                      'text-sm leading-none transition-colors select-none sm:text-base',
                       feedback === null && 'border-border bg-surface hover:bg-surface-muted',
                       feedback !== null && isAnswer && 'border-positive bg-positive/10',
                       feedback !== null &&
@@ -133,7 +148,11 @@ export function UnitBookBlock({ seed, level = 0, onComplete }: UnitBookBlockProp
                       feedback !== null && !isAnswer && !chosen && 'border-border opacity-40',
                     )}
                   >
-                    {column.text}
+                    {[...column.text].map((char, position) => (
+                      <span key={`${position}-${char}`} className="block py-[0.15em]">
+                        {char}
+                      </span>
+                    ))}
                   </button>
                 </li>
               )

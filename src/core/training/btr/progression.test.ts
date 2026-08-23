@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BTR_EXERCISES, btrExercise, type BtrExercise } from './exercises'
+import { SACCADE } from './saccade'
 import {
   LEVEL_RULES,
   currentLevel,
@@ -288,5 +289,26 @@ describe('1回あたりの目安が段になる種目（サッケイド）', () 
     // 制限時間が縮むぶん課題そのものが難しくなるので、求めるスコアは据え置きでよい。
     const rule = levelRuleFor('logical_test')!
     expect(requiredScoreAt(rule, 0, 'advance')).toBe(requiredScoreAt(rule, 4, 'advance'))
+  })
+})
+
+describe('サッケイドの閾値（1往復＝8本）', () => {
+  it('1往復が8本ぶんとして数えられている', () => {
+    // 30秒 ÷（1本の目安 × 8本）が、その段で求める往復数になる。
+    const rule = levelRuleFor('saccade')!
+    for (const [level, interval] of rule.timeLimits.entries()) {
+      const expected = Math.max(1, Math.round(SACCADE.durationMs / (interval * SACCADE.lines)))
+      expect(requiredScoreAt(rule, level, 'advance'), `${level} 段`).toBe(expected)
+    }
+  })
+
+  it('求める往復数が現実的な範囲に収まる', () => {
+    // 1往復ごとに押すので、30秒で数十回も押させる形にはしない。
+    const rule = levelRuleFor('saccade')!
+    for (const [level] of rule.timeLimits.entries()) {
+      const required = requiredScoreAt(rule, level, 'advance')
+      expect(required).toBeGreaterThanOrEqual(3)
+      expect(required).toBeLessThanOrEqual(20)
+    }
   })
 })

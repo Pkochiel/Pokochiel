@@ -55,6 +55,8 @@ export interface LevelRule {
   readonly paceTarget?: boolean
   /** paceTarget の種目で、1回ぶんの長さ（ms）。往復数に直すのに使う。 */
   readonly totalMs?: number
+  /** paceTarget の種目で、1往復が何単位ぶんか（サッケイドは8本）。 */
+  readonly unitsPerRep?: number
 }
 
 /**
@@ -65,10 +67,12 @@ export interface LevelRule {
  */
 export const LEVEL_RULES: Partial<Record<BtrExercise, LevelRule>> = {
   saccade: {
-    // 段ごとの1往復あたりの目安時間。その段の往復数に直して判定する。
+    // 段ごとの1本あたりの目安時間。1往復は8本ぶんなので、
+    // その段で求める往復数は 30秒 ÷（目安 × 8）になる。
     timeLimits: SACCADE.intervalsMs,
     paceTarget: true,
     totalMs: SACCADE.durationMs,
+    unitsPerRep: SACCADE.lines,
     // 正確さを測れる種目ではない（自分で数えた往復数しかない）ので主スコアだけで見る。
     // 実際の閾値は段ごとに計算される（advanceScore は使わない）。
     advanceScore: 0,
@@ -180,7 +184,9 @@ export function requiredScoreAt(
     return kind === 'advance' ? rule.advanceScore : rule.fallbackScore
   }
   const index = Math.min(Math.max(0, level), rule.timeLimits.length - 1)
-  const target = Math.round(rule.totalMs / (rule.timeLimits[index] ?? rule.totalMs))
+  const perUnit = rule.timeLimits[index] ?? rule.totalMs
+  const perRep = perUnit * (rule.unitsPerRep ?? 1)
+  const target = Math.max(1, Math.round(rule.totalMs / perRep))
   // 下がるのは、その段で求める数の半分にも届かなかったとき。
   return kind === 'advance' ? target : Math.round(target / 2)
 }
