@@ -17,7 +17,7 @@ export interface BtrOutcome {
   readonly score: number
   /** サッケイドのたて／よこのような、同じ種目の中の区別 */
   readonly variant?: string
-  /** 複数試行する種目の各試行スコア。数字ランダムの4枚など。 */
+  /** 複数試行する種目の各試行スコア。数字ランダムの2枚など。 */
   readonly attempts?: readonly number[]
   /** かかった時間（ms） */
   readonly elapsedMs?: number

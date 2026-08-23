@@ -161,11 +161,18 @@ describe('BTR_EXERCISES', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('90分の配分の合計が90分になる', () => {
-    // 記録と振り返りの4分を除いた86分。
-    const total = BTR_EXERCISES.reduce((sum, spec) => sum + spec.minutes, 0)
-    // BPシートは日替わりで抜けるので、その6分を引くと86分。
-    expect(total - btrExercise('bp_sheet').minutes).toBe(86)
+  it('どの種目も分数が正の重みになっている', () => {
+    // 分は絶対値ではなく、選ばれた種目どうしの比として効く（share が枠に縮める）。
+    // 0 や負の種目があると、その種目だけ枠を取れなくなる。
+    for (const spec of BTR_EXERCISES) {
+      expect(spec.minutes, spec.id).toBeGreaterThan(0)
+    }
+  })
+
+  it('重みの差が消えていない', () => {
+    // 全部同じ分数だと、2分で足りる種目と10分要る種目が同じ長さになる。
+    const weights = new Set(BTR_EXERCISES.map((spec) => spec.minutes))
+    expect(weights.size).toBeGreaterThan(2)
   })
 
   it('課す条件が変わらない種目は級を持たない', () => {

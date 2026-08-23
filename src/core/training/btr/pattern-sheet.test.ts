@@ -82,14 +82,40 @@ describe('buildPatternSheet', () => {
     }
   })
 
-  it('10種が一様に出る', () => {
-    // 対象だけを多めに置かない。何個あるか分からないまま探すのがこの課題の前提。
+  it('1列に10種がちょうど1回ずつ入る', () => {
+    // 実物のシートがそうなっている。1列10字・字は10種なので、列は並べ替えになる。
+    for (const column of sheet().columns) {
+      const labels = column.cells.map((cell) => cell.label)
+      expect(new Set(labels).size, `列 ${column.number}`).toBe(KANJI_DIGITS.length)
+      expect([...labels].sort()).toEqual([...KANJI_DIGITS].sort())
+    }
+  })
+
+  it('対象の字が入っていない列がない', () => {
+    // 無い列があると「列を順に見て1つ見つけたら次へ」という進み方が成立しない。
+    for (const column of sheet().columns) {
+      expect(column.targetCount, `列 ${column.number}`).toBe(1)
+    }
+  })
+
+  it('同じ字が同じ列に二度入らない', () => {
+    for (const column of sheet().columns) {
+      const labels = column.cells.map((cell) => cell.label)
+      expect(new Set(labels).size).toBe(labels.length)
+    }
+  })
+
+  it('対象の総数が列数と一致する', () => {
+    // 1列に1つずつなので、拾えた数はそのまま到達した列数になる。
     const built = sheet()
-    const all = built.columns.flatMap((column) => column.cells)
-    const targets = all.filter((cell) => cell.target).length
-    const expected = all.length / KANJI_DIGITS.length
-    expect(targets).toBeGreaterThan(expected * 0.7)
-    expect(targets).toBeLessThan(expected * 1.3)
+    expect(built.targetCount).toBe(built.columns.length)
+  })
+
+  it('列ごとに並びが変わる', () => {
+    // 全列が同じ並びだと、位置を覚えるだけで探さずに済んでしまう。
+    const columns = sheet().columns.slice(0, 20)
+    const patterns = new Set(columns.map((c) => c.cells.map((cell) => cell.label).join('')))
+    expect(patterns.size).toBeGreaterThan(columns.length * 0.8)
   })
 
   it('ターンごとに3枚作る', () => {
@@ -97,12 +123,27 @@ describe('buildPatternSheet', () => {
     expect(sheets.map((s) => s.targetLabel)).toEqual([...PATTERN_SHEET.targets])
   })
 
+  it('3ターンとも同じ並びのシートになる', () => {
+    // 教室と同じく1枚の紙を3回見る。並びは同じで、探す字だけが変わる。
+    const [first, second, third] = buildPatternSheets('day')
+    const labels = (s: typeof first) =>
+      s!.columns.map((c) => c.cells.map((cell) => cell.label).join('')).join('|')
+    expect(labels(second)).toBe(labels(first))
+    expect(labels(third)).toBe(labels(first))
+    // 対象の印だけが違う。
+    expect(second!.columns[0]!.cells.findIndex((c) => c.target)).not.toBe(
+      first!.columns[0]!.cells.findIndex((c) => c.target),
+    )
+  })
+
   it('同じ種なら同じシートになる', () => {
     expect(sheet('x')).toEqual(sheet('x'))
   })
 
   it('種が変わればシートが変わる', () => {
-    expect(sheet('x').columns).not.toEqual(sheet('y').columns)
+    const labels = (seedValue: string) =>
+      sheet(seedValue).columns.map((c) => c.cells.map((cell) => cell.label).join('')).join('|')
+    expect(labels('x')).not.toBe(labels('y'))
   })
 
   it('列や字数が 0 以下なら空を返す', () => {

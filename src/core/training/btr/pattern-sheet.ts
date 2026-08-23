@@ -1,4 +1,4 @@
-import { createRandom, hashString } from '../../util/seeded-shuffle'
+import { seededShuffle } from '../../util/seeded-shuffle'
 
 /**
  * パターンシート（BTRメソッド 認知視野拡大）
@@ -12,9 +12,12 @@ import { createRandom, hashString } from '../../util/seeded-shuffle'
  * - 縦書きの列が並ぶ。1列がひとつのユニットで、これが「一行」
  * - 列には5刻みの番号が振ってあり、80まである
  * - 使う字は **〇一二三四五六七八九** の10種。漢数字の「桁」であって、一〜十ではない
+ * - **1列は10字で、10種がちょうど1回ずつ入る**（列ごとの並べ替え）
  * - 列は上下2段に折り返して並ぶ
  *
  * 対象の字を探すターンを繰り返す（一を探す、二を探す、三を探す。各90秒）。
+ * **3ターンとも同じシートを使う。** 1列に10種が1回ずつ入っているので、
+ * 同じ紙のまま探す字だけを替えられる。
  */
 
 /**
@@ -37,6 +40,15 @@ export const PATTERN_SHEET = {
   targets: ['一', '二', '三'] as const,
   /** 1ターンの制限時間（ms） */
   turnMs: 90_000,
+  /**
+   * 級を上げるのに要る、シート全体に対する割合。
+   *
+   * 1列に対象がちょうど1つある以上、拾えた数はそのまま到達した列数になる。
+   * 全列を90秒で終えるのが上限なので、そこからの割合で置いた。
+   * **この2つの数字は暫定である。** 教室の基準は確認できていない。
+   */
+  advanceRatio: 0.6,
+  fallbackRatio: 0.25,
 } as const
 
 export interface PatternCell {
@@ -74,9 +86,12 @@ export interface BuildPatternSheetInput {
 /**
  * シートを作る。
  *
- * 字は10種から一様に引く。対象だけを多めに置くようなことはしない。
- * 実物のシートも数字の並びに偏りがあるようには見えず、
- * 「対象が何個あるか分からないまま探す」ことがこの課題の前提だと考えられる。
+ * **1列には10種がちょうど1回ずつ入る。** 1列が10字で字の種類も10種なので、
+ * 列ごとに並べ替えたものを置く。
+ *
+ * 10種から毎回引く形にすると、対象の字が1つも無い列や、同じ字が2つ入る列ができる。
+ * そうなると「列を順に見ていって対象を1つ見つけたら次の列へ」という進み方が成立せず、
+ * 列に振ってある5刻みの番号も意味を失う。
  */
 export function buildPatternSheet(input: BuildPatternSheetInput): PatternSheet {
   const {
@@ -91,14 +106,19 @@ export function buildPatternSheet(input: BuildPatternSheetInput): PatternSheet {
     return { id: `pattern-${targetLabel}`, targetLabel, columns: [], targetCount: 0 }
   }
 
-  const random = createRandom(hashString(`${seed}:pattern:${targetLabel}`))
   const perBand = Math.ceil(columnCount / Math.max(1, bands))
   let targetCount = 0
 
   const columns = Array.from({ length: columnCount }, (_, index): PatternColumn => {
+    // 列ごとに10種を並べ替える。字数が種類数より多ければ、足りない分は
+    // もう一巡させる（実物は10字ちょうどなので、通常は一巡で収まる）。
+    const labels: string[] = []
+    for (let round = 0; labels.length < charsPerColumn; round += 1) {
+      labels.push(...seededShuffle(KANJI_DIGITS, `${seed}:pattern:${index}:${round}`))
+    }
+
     let columnTargets = 0
-    const cells = Array.from({ length: charsPerColumn }, (_, row): PatternCell => {
-      const label = KANJI_DIGITS[Math.floor(random() * KANJI_DIGITS.length)] ?? KANJI_DIGITS[0]
+    const cells = labels.slice(0, charsPerColumn).map((label, row): PatternCell => {
       const target = label === targetLabel
       if (target) columnTargets += 1
       return { row, label, target }
@@ -116,7 +136,11 @@ export function buildPatternSheet(input: BuildPatternSheetInput): PatternSheet {
   return { id: `pattern-${targetLabel}`, targetLabel, columns, targetCount }
 }
 
-/** 3ターンぶんのシート。 */
+/**
+ * 3ターンぶんのシート。
+ *
+ * 並びは3つとも同じで、対象の印だけが違う。教室と同じく1枚の紙を3回見る形になる。
+ */
 export function buildPatternSheets(seed: string): PatternSheet[] {
   return PATTERN_SHEET.targets.map((target) =>
     buildPatternSheet({ seed, targetLabel: target }),

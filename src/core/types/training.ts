@@ -123,7 +123,7 @@ export interface BtrResult {
   variant: string | null
   /** その種目の主スコア（到達数・正答数・往復数など） */
   score: number
-  /** 複数試行する種目の各試行スコア（数字ランダムの4枚など）。単発なら空。 */
+  /** 複数試行する種目の各試行スコア（数字ランダムの各枚など）。単発なら空。 */
   attempts: number[]
   /** 所要時間（ms）。時間制の種目では制限時間そのものになる。 */
   elapsedMs: number | null

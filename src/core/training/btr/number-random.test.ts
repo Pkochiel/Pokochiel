@@ -21,7 +21,7 @@ describe('数字ランダムの盤面', () => {
     expect(values).toEqual(Array.from({ length: 99 }, (_, i) => i + 1))
   })
 
-  it('4枚のシートを作る', () => {
+  it('決められた枚数のシートを作る', () => {
     expect(buildNumberRandomSheets('day')).toHaveLength(NUMBER_RANDOM.sheets)
   })
 
@@ -117,7 +117,7 @@ describe('scoreSequential', () => {
 })
 
 describe('combineNumberRandom', () => {
-  it('4枚の到達数を並びとして残す', () => {
+  it('各枚の到達数を並びとして残す', () => {
     // 記録は「22・20・18・24」の形で残したい。
     const results = [22, 20, 18, 24].map((reached) => ({ reached, wrong: 0, max: 99 }))
     expect(combineNumberRandom(results).attempts).toEqual([22, 20, 18, 24])

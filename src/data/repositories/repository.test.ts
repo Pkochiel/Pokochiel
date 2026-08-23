@@ -366,7 +366,7 @@ describe('RecordStoreRepository: BTR results', () => {
   })
 
   it('複数試行のスコアを並びのまま残す', async () => {
-    // 数字ランダムは4枚。合計や平均にすると、どの枚で落ちたかが消える。
+    // 数字ランダムは複数枚。合計や平均にすると、どの枚で落ちたかが消える。
     const { repo } = createRepository()
     await repo.saveBtrResult({
       sessionId: 's1',

@@ -37,7 +37,12 @@ export interface BtrExerciseSpec {
   readonly id: BtrExercise
   readonly name: string
   readonly stage: BtrStage
-  /** 1回90分の配分での分数。短い回はここから縮める。 */
+  /**
+   * 1回90分の配分での分数。
+   *
+   * 短い回では、選ばれた種目どうしの**比**を保ったまま枠に縮める。
+   * 絶対値ではなく重みとして効く。
+   */
   readonly minutes: number
   /**
    * 日替わりの抽選に入れず、毎回入れるか。
@@ -68,7 +73,7 @@ export interface BtrExerciseSpec {
 export const BTR_EXERCISES: readonly BtrExerciseSpec[] = [
   { id: 'breathing', name: 'カウント呼吸法', stage: 'prepare', minutes: 3, always: true, leveled: false },
   { id: 'saccade', name: 'サッケイド', stage: 'field', minutes: 5, always: true, leveled: true },
-  { id: 'number_random', name: '数字ランダム', stage: 'field', minutes: 6, always: false, leveled: true },
+  { id: 'number_random', name: '数字ランダム', stage: 'field', minutes: 4, always: false, leveled: true },
   { id: 'unit_book', name: 'ユニットブック', stage: 'field', minutes: 6, always: false, leveled: true },
   { id: 'pattern_sheet', name: '漢数字一行', stage: 'field', minutes: 6, always: false, leveled: true },
   { id: 'bp_sheet', name: 'BPシート', stage: 'field', minutes: 6, always: false, leveled: true },

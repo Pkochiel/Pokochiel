@@ -5,7 +5,8 @@ import { createRandom, hashString, seededShuffle } from '../../util/seeded-shuff
  *
  * 1〜99 が画面の中にランダムにちりばめられている。それを **1から順に拾う**。
  * 制限時間内にどこまで到達できたかがスコアになる。
- * 4種類のシートを使い、公開スコア「22・20・18・24」はその4枚それぞれの到達数である。
+ * **2枚のシートを続けて行う。** 公開スコアが4つ並んでいたのは、
+ * 別の種目のぶんも一緒に並べていたためで、この種目自体は2枚である。
  *
  * 盤面を格子で作らず散らすのは、次に拾う数の位置が予測できないようにするため。
  * 整列していると視線が行を走るだけになり、盤面全体を走査する訓練にならない。
@@ -15,13 +16,13 @@ export const NUMBER_RANDOM = {
   /** 盤面に置く数の最大値。1〜99。 */
   max: 99,
   /** シートの枚数 */
-  sheets: 4,
+  sheets: 2,
   /**
    * 1枚あたりの制限時間（ms）の段階。基準に届いたら次に短いものへ。
    * 公開スコアの到達数がおおむね20前後であることから、初級を60秒に置いている。
    */
   timeLimits: [60_000, 45_000, 40_000, 35_000, 30_000],
-  /** 次の段へ上がる到達数（4枚の平均） */
+  /** 次の段へ上がる到達数（2枚の平均） */
   advanceReached: 30,
   /** ひとつ前の段へ戻る到達数 */
   fallbackReached: 15,
@@ -84,7 +85,7 @@ export function buildNumberRandomSheet(seed: string, sheetIndex: number): Scatte
   return { id: `number-random-${sheetIndex}`, points, max }
 }
 
-/** 4枚ぶんの盤面。 */
+/** 全部の枚数ぶんの盤面。 */
 export function buildNumberRandomSheets(seed: string): ScatterSheet[] {
   return Array.from({ length: NUMBER_RANDOM.sheets }, (_, index) =>
     buildNumberRandomSheet(seed, index),
@@ -120,10 +121,10 @@ export function scoreSequential(taps: readonly number[], max: number): Sequentia
 export interface NumberRandomResult {
   /** 各シートの到達数。記録にはこの並びをそのまま残す（「22・20・18・24」の形）。 */
   readonly attempts: readonly number[]
-  /** 主スコア。4枚の合計。 */
+  /** 主スコア。全部の枚の合計。 */
   readonly reached: number
   readonly wrong: number
-  /** 4枚の平均。レベル判定に使う。 */
+  /** 各枚の平均。レベル判定に使う。 */
   readonly average: number
 }
 

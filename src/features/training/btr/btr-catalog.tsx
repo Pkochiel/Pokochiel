@@ -65,7 +65,7 @@ const COMPONENTS: Record<BtrExercise, ComponentType<BtrBlockProps>> = {
 const SUMMARIES: Record<BtrExercise, string> = {
   breathing: '決まった時間で自分の呼吸を数える。少ないほうがよい',
   saccade: '文字を出さず、視線だけを往復させる。たて・よこは日ごとに変わる',
-  number_random: '散らばった 1〜99 を1から順に拾う。4枚',
+  number_random: '散らばった 1〜99 を1から順に拾う。2枚',
   unit_book: 'よく似た8つの文から、お題の文を探す',
   pattern_sheet: '縦書き80列から対象の漢数字を探す。3ターン',
   bp_sheet: '動きの中で文字を判別する',

@@ -18,7 +18,7 @@ import type { BtrBlockProps } from './shared/btr-block'
  * 数字ランダム（BTRメソッド 認知視野拡大）
  *
  * 1〜99 が散らばった盤を **1から順に拾う**。制限時間内にどこまで到達できたか。
- * 4枚のシートを続けて行い、記録は「22・20・18・24」のように各枚の到達数を並べる。
+ * 2枚のシートを続けて行い、記録は「22・20」のように各枚の到達数を並べる。
  */
 
 export type NumberRandomBlockProps = BtrBlockProps
@@ -98,7 +98,7 @@ export function NumberRandomBlock({ seed, level = 0, onComplete }: NumberRandomB
         { label: '1枚あたりの平均', value: `${combined.average}` },
         { label: '押し間違い', value: `${combined.wrong} 回` },
       ]}
-      note="4枚それぞれの到達数を並べて記録します。合計より、枚ごとの並びのほうが調子の変化が見えます。"
+      note="1枚ごとの到達数を並べて記録します。合計より、枚ごとの並びのほうが調子の変化が見えます。"
       onNext={() =>
         onComplete({ score: combined.reached, attempts: combined.attempts, timeLimitMs })
       }
