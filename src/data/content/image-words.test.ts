@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { IMAGE_MEMORY } from '@/core/training/btr/image-memory'
-import { IMAGE_WORDS, pickImageWords, toImagePairs } from './image-words'
+import { IMAGE_WORDS, IMAGE_WORD_MAX_LENGTH, pickImageWords } from './image-words'
 
 describe('IMAGE_WORDS', () => {
   it('40語を選べるだけの数がある', () => {
@@ -13,6 +13,14 @@ describe('IMAGE_WORDS', () => {
 
   it('空の語がない', () => {
     for (const word of IMAGE_WORDS) expect(word.trim().length).toBeGreaterThan(0)
+  })
+
+  it('シートの1列に収まる長さである', () => {
+    // 1語を1列に縦書きで並べるので、長い語が混ざるとその列だけ背が伸び、
+    // 下に続く解答欄の高さが揃わない。
+    for (const word of IMAGE_WORDS) {
+      expect([...word].length, word).toBeLessThanOrEqual(IMAGE_WORD_MAX_LENGTH)
+    }
   })
 })
 
@@ -58,7 +66,7 @@ describe('pickImageWords', () => {
     // 固まると連想でつながってしまい、1語ずつイメージを作る訓練にならない。
     // 分野をまたいで1語ずつ拾うので、先頭のほうは必ず別分野になる。
     const picked = pickImageWords('day')
-    const kitchen = ['やかん', 'まな板', 'おたま', '茶碗', '冷蔵庫', 'フライパン', '水筒', 'ざる']
+    const kitchen = ['やかん', 'まな板', 'おたま', '茶碗', '冷蔵庫', 'しゃもじ', '水筒', 'ざる']
     let consecutive = 0
     let worst = 0
     for (const word of picked) {
@@ -66,29 +74,5 @@ describe('pickImageWords', () => {
       worst = Math.max(worst, consecutive)
     }
     expect(worst).toBeLessThanOrEqual(1)
-  })
-})
-
-describe('toImagePairs', () => {
-  it('2語ずつの組にする', () => {
-    expect(toImagePairs(['a', 'b', 'c', 'd'])).toEqual([
-      ['a', 'b'],
-      ['c', 'd'],
-    ])
-  })
-
-  it('奇数なら最後の組の下は空になる', () => {
-    expect(toImagePairs(['a', 'b', 'c'])).toEqual([
-      ['a', 'b'],
-      ['c', null],
-    ])
-  })
-
-  it('40語なら20組になる', () => {
-    expect(toImagePairs(pickImageWords('day'))).toHaveLength(20)
-  })
-
-  it('空なら組も空', () => {
-    expect(toImagePairs([])).toEqual([])
   })
 })

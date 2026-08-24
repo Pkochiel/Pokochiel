@@ -133,7 +133,7 @@ core/session/baseline-flow.test.ts           記述確定前に Key Points を�
 core/session/timer.test.ts                   ポーズ・非表示中の除外
 core/scheduler/recall-schedule.test.ts       翌日算出・TZ・期限切れ・重複防止
 data/content/kana-stories.test.ts            課題文の長さ・対象の密度・問いの散らばり
-data/content/image-words.test.ts             具体物であること・分野が固まらないこと
+data/content/image-words.test.ts             具体物であること・分野が固まらないこと・1列に収まる長さ
 data/reading-books.test.ts                   本の登録・桁外れの入力を弾くこと・控えの上限
 ```
 

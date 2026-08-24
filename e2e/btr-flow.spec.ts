@@ -126,7 +126,7 @@ test('種目はひとつずつでも開ける', async ({ page }) => {
     ['saccade', '印から印へ目だけを飛ばして'],
     ['number-random', '順に押してください'],
     ['kana-pickup', '物語の内容も考えながら'],
-    ['image-memory', '上下2つずつ並びます'],
+    ['image-memory', '縦書きで右から左へ並びます'],
     ['paced-reading', '自分の本'],
   ] as const) {
     await page.goto(`/btr/${slug}`)

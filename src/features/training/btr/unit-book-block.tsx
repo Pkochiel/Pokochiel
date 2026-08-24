@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/cn'
 import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
+import { VerticalText } from './shared/vertical-text'
 import type { BtrBlockProps } from './shared/btr-block'
 
 /**
@@ -148,11 +149,7 @@ export function UnitBookBlock({ seed, level = 0, onComplete }: UnitBookBlockProp
                       feedback !== null && !isAnswer && !chosen && 'border-border opacity-40',
                     )}
                   >
-                    {[...column.text].map((char, position) => (
-                      <span key={`${position}-${char}`} className="block py-[0.15em]">
-                        {char}
-                      </span>
-                    ))}
+                    <VerticalText text={column.text} />
                   </button>
                 </li>
               )
