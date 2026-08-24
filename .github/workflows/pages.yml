@@ -1,0 +1,66 @@
+name: Deploy to GitHub Pages
+
+# このアプリはサーバー処理を持たない（全ページ静的・データは端末内の IndexedDB）ため、
+# 静的ホスティングにそのまま載る。Pages に置くことで、Node.js を入れずに
+# ブラウザから試用できる URL が得られる。
+on:
+  push:
+    branches:
+      - main
+      - master
+      # 既定ブランチ。PR #3 をマージした場合はここから配信される
+      - claude/scrape-networking-tutorials-WlP1L
+      # 開発ブランチから直接配信する場合（github-pages 環境で許可が必要）
+      - 'claude/speed-reading-lab-app-**'
+  workflow_dispatch:
+
+# 配信中の版を壊さないよう、デプロイは直列で行う
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: 静的書き出し
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build static site
+        env:
+          STATIC_EXPORT: 'true'
+          # Pages はリポジトリ名のサブパスで配信される
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+          # 同じコミットからは同じビルド ID になるようにする
+          BUILD_ID: ${{ github.sha }}
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    name: 配信
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

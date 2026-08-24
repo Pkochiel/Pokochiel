@@ -1,0 +1,172 @@
+@import 'tailwindcss';
+
+/*
+ * 配色: White / Black / Navy / Blue / Gray + アクセント1色（Amber）
+ * セマンティックトークンを CSS 変数で定義し、light / dark で値だけ差し替える。
+ * コンポーネント側は bg-surface / text-fg のように意味で参照する。
+ */
+:root {
+  --bg: #fbfbfd;
+  --surface: #ffffff;
+  --surface-muted: #f4f6fa;
+  --fg: #0b1220;
+  --fg-muted: #5b6474;
+  --fg-subtle: #8b94a5;
+  --border: #e3e6ec;
+  --navy: #16233d;
+  --brand: #2563eb;
+  --brand-fg: #ffffff;
+  --brand-soft: #eff4ff;
+  --accent: #d97a1e;
+  --accent-soft: #fdf3e7;
+  --positive: #17805a;
+  --negative: #b4423a;
+
+  /*
+   * チャート用の系列色。CVD 分離・明度帯・コントラストを
+   * dataviz の検証スクリプトで確認した値を使う（light / dark で別に選定）。
+   */
+  --chart-1: #2563eb;
+  --chart-2: #d97a1e;
+  --chart-grid: #e8ebf0;
+
+  /* Reading Mode: 長文表示専用のトークン */
+  --reading-bg: #fdfdfb;
+  --reading-fg: #14181f;
+  --reading-size: 1.25rem;
+  --reading-leading: 2.15;
+  --reading-measure: 34rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0a0e16;
+    --surface: #121826;
+    --surface-muted: #182034;
+    --fg: #e8ecf3;
+    --fg-muted: #9aa4b6;
+    --fg-subtle: #6d7789;
+    --border: #232c3d;
+    --navy: #c3cddf;
+    --brand: #5b8def;
+    --brand-fg: #08101f;
+    --brand-soft: #16223c;
+    --accent: #e0a14a;
+    --accent-soft: #2a2113;
+    --positive: #45b58a;
+    --negative: #e0736a;
+
+    --reading-bg: #0e131d;
+    --reading-fg: #e6eaf1;
+
+    --chart-1: #5b8def;
+    --chart-2: #bf8130;
+    --chart-grid: #232c3d;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0a0e16;
+  --surface: #121826;
+  --surface-muted: #182034;
+  --fg: #e8ecf3;
+  --fg-muted: #9aa4b6;
+  --fg-subtle: #6d7789;
+  --border: #232c3d;
+  --navy: #c3cddf;
+  --brand: #5b8def;
+  --brand-fg: #08101f;
+  --brand-soft: #16223c;
+  --accent: #e0a14a;
+  --accent-soft: #2a2113;
+  --positive: #45b58a;
+  --negative: #e0736a;
+
+  --reading-bg: #0e131d;
+  --reading-fg: #e6eaf1;
+
+  --chart-1: #5b8def;
+  --chart-2: #bf8130;
+  --chart-grid: #232c3d;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-border: var(--border);
+  --color-navy: var(--navy);
+  --color-brand: var(--brand);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-soft: var(--brand-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-reading-bg: var(--reading-bg);
+  --color-reading-fg: var(--reading-fg);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-grid: var(--chart-grid);
+
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP',
+    'Yu Gothic UI', Meiryo, sans-serif;
+  --font-reading:
+    'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', 'Noto Serif JP', 'MS PMincho', serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Consolas, monospace;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  /* iOS Safari のセーフエリア（下部タブバー用） */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 数値の桁が揺れないようにする（CPM やタイマーの表示用） */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 本文組版。Reading Mode の中核。 */
+.reading-body {
+  font-size: var(--reading-size);
+  line-height: var(--reading-leading);
+  max-width: var(--reading-measure);
+  letter-spacing: 0.02em;
+}
+
+.reading-serif {
+  font-family: var(--font-reading);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* キーボード操作を第一級に扱う */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
