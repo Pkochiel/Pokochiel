@@ -25,6 +25,8 @@ const config = [
       'playwright-report/**',
       'test-results/**',
       'next-env.d.ts',
+      // アプリ版（Expo）は自分の ESLint 設定と依存を mobile/ の中に持つ。
+      'mobile/**',
     ],
   },
   ...withExtraRules,

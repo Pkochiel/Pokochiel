@@ -138,6 +138,7 @@ data/       教材コンテンツ／永続化（Repository 実装）— core の
 │  ├─ sw.js                          # Service Worker（オフライン起動）
 │  └─ icon-192.png / icon-512.png    # PWA アイコン
 ├─ scripts/generate-icons.mjs        # アイコン生成（依存なし・node:zlib のみ）
+├─ mobile/                           # アプリ版（Expo + WebView）。依存と設定は中で完結 → §8-c
 └─ (既存) 3min_networking.txt, scrape_*.py   ← 触らない
 ```
 
@@ -294,6 +295,32 @@ Service Worker は本番ビルドでのみ登録する（開発中はキャッ�
 表示する。止まったのではなく、そのまま使えることを伝える。
 
 手順とチェックリストは [docs/RELEASE.md](RELEASE.md)。
+
+## 8-c. アプリ版（Expo の WebView ラッパー）
+
+`mobile/` は配信中の Web アプリを WebView で開くだけの Expo アプリで、**画面は1枚も持たない**。
+UI もデータも Web アプリのものをそのまま使うので、ここで足すのは WebView の外側の振る舞いだけ。
+
+| 振る舞い | iOS | Android |
+|---|---|---|
+| セーフエリア | ネイティブ側で四辺の内側に収め、帯を `themeColor` と同じ色で塗る | 同左 |
+| 引っ張って更新 | WebView の `pullToRefreshEnabled` | `RefreshControl` で包む（WebView 側の実装は空） |
+| 戻る | 端からのスワイプ | 戻るボタン。戻れなければアプリを閉じる |
+| アプリ外のリンク | ブラウザ・対応アプリで開く | 同左 |
+
+- **種目・組み立て・計測の途中では引っ張って更新を切る。** 再読み込みでその回が消えるため。
+  判定は `mobile/src/navigation-policy.ts`（単体テストあり）
+- **表示する URL は `mobile/app.config.ts` の1か所だけ**で決める（環境変数 `WEB_APP_URL`）。
+  iOS の App-Bound Domains も同じ値から作る
+- iOS の WKWebView で Service Worker を動かすには App-Bound Domains の宣言が要る。
+  自分でビルドしたアプリにしか入らないので、Expo Go ではオフライン起動できない
+- **Backup の書き出しはアプリ版では動かない。** `<a download>` で開く blob: の URL を、
+  WebView はダウンロードとして扱えない（iOS はページ遷移、Android は DownloadManager が拒否）。
+  アプリ版では書き出しを止めてあり（画面が JSON で置き換わるのを防ぐため）、
+  直すには Web とネイティブの橋渡しが要る。取り込み（`<input type="file">`）は、
+  WebView がファイル選択を出せる（Android は `onShowFileChooser`、iOS は WKWebView 標準）ので使える見込み。実機では未確認
+
+ストアに出す前の作業と、実機で確かめていない点は [mobile/README.md](../mobile/README.md)。
 
 ## 9. テスト戦略
 
