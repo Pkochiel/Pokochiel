@@ -1,0 +1,19 @@
+# Render Blueprint: スポスタ（spot-stamp/）を無料で公開する設定
+# Render ダッシュボードの New → Blueprint でこのリポジトリを選ぶと自動で構成されます。
+# データは無料の Postgres（Neon など）に保存するので、無料プランでも再起動で消えません。
+services:
+  - type: web
+    name: spot-stamp
+    runtime: node
+    rootDir: spot-stamp
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Neon などの接続文字列（postgresql://...）。作成時に入力を求められます
+      - key: DATABASE_URL
+        sync: false

@@ -1,0 +1,9 @@
+{
+  "name": "スポスタ - みんなのスポット・スタンプラリー",
+  "short_name": "スポスタ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff6e8",
+  "theme_color": "#c8323c",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
