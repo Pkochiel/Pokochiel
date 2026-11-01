@@ -89,13 +89,14 @@ async function sendFile(res, file, cache) {
 }
 
 /**
- * @param {{ dataDir?: string, staticDir?: string }} [opts]
+ * @param {{ dataDir?: string, staticDir?: string, databaseUrl?: string }} [opts]
  */
 export async function createApp(opts = {}) {
   const dataDir = opts.dataDir ?? process.env.DATA_DIR ?? path.join(__dirname, '..', 'data');
   const staticDir = opts.staticDir ?? path.join(__dirname, '..', 'dist');
-  const store = new RoomStore(dataDir);
+  const store = RoomStore.fromEnv({ dataDir, databaseUrl: opts.databaseUrl });
   await store.init();
+  console.log(`[spot-stamp] storage: ${store.kind}`);
 
   /** @param {http.IncomingMessage} req @param {http.ServerResponse} res */
   async function handle(req, res) {
@@ -104,7 +105,7 @@ export async function createApp(opts = {}) {
     const method = req.method ?? 'GET';
 
     if (parts[0] === 'api') {
-      if (parts[1] === 'health') return sendJson(res, 200, { ok: true });
+      if (parts[1] === 'health') return sendJson(res, 200, { ok: true, storage: store.kind });
       if (parts[1] !== 'rooms') throw new HttpError(404, 'not found');
       const room = parts[2] ?? '';
       if (!ROOM_RE.test(room)) throw new HttpError(400, 'invalid room id');
@@ -154,8 +155,16 @@ export async function createApp(opts = {}) {
     if (parts[0] === 'uploads' && parts.length === 2) {
       const name = parts[1] ?? '';
       if (!/^[a-z0-9-]+-[A-Za-z0-9_-]+-[a-f0-9]{8}\.(jpg|png|webp)$/.test(name)) throw new HttpError(404, 'not found');
-      if (await sendFile(res, path.join(store.uploadsDir, name), 'public, max-age=31536000, immutable')) return;
-      throw new HttpError(404, 'not found');
+      const photo = await store.getPhoto(name);
+      if (!photo) throw new HttpError(404, 'not found');
+      res.writeHead(200, {
+        'Content-Type': photo.mime,
+        'Content-Length': photo.buf.length,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      res.end(method === 'HEAD' ? undefined : photo.buf);
+      return;
     }
 
     // 静的ファイル（パストラバーサル防止）
@@ -174,12 +183,21 @@ export async function createApp(opts = {}) {
       else res.end();
     });
   });
+  server.on('close', () => void store.close());
   return { server, store };
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const port = Number(process.env.PORT ?? process.env.API_PORT ?? 8787);
-  const { server } = await createApp();
+  const { server, store } = await createApp();
   server.listen(port, () => console.log(`[spot-stamp] http://localhost:${port}`));
+  // Render などの停止シグナルで DB 接続をきれいに閉じる
+  const shutdown = () => {
+    server.close();
+    void store.close().finally(() => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref();
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }

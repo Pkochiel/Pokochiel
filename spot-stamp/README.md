@@ -30,18 +30,24 @@ npm run build
 PORT=8787 DATA_DIR=./data npm start   # dist/ と API を1プロセスで配信
 ```
 
-環境変数: `PORT`, `DATA_DIR`（JSON と写真の保存先）, `VITE_TILE_URL` / `VITE_TILE_ATTRIBUTION`（地図タイルの差し替え用。Mapbox などに変える場合）, `VITE_API_BASE`。
+環境変数: `PORT`, `DATABASE_URL`（Postgres。設定するとこちらに保存）, `DATA_DIR`（`DATABASE_URL` が無いときの JSON と写真の保存先）, `VITE_TILE_URL` / `VITE_TILE_ATTRIBUTION`（地図タイルの差し替え用。Mapbox などに変える場合）, `VITE_API_BASE`。
 
-## インターネットに公開（Render）
+## インターネットに無料で公開（Render + Neon）
 
-リポジトリ直下の `render.yaml`（Blueprint）にすべての設定が入っています。
+アプリ本体は Render の無料プランで動かし、データ（スポット、スタンプ、写真）は無料の Postgres である Neon に保存します。
+設定はすべてリポジトリ直下の `render.yaml` に入っています。
 
-1. https://render.com に GitHub アカウントでサインアップ
-2. ダッシュボードの **New → Blueprint** を選び、このリポジトリと公開したいブランチを選択
-3. 内容（Web サービス `spot-stamp`、1GB ディスク `/var/data`）を確認して **Apply**
-4. 数分で `https://spot-stamp-xxxx.onrender.com` が発行されます
+1. **Neon**（https://neon.tech）に GitHub アカウントでサインアップし、プロジェクトを作る（リージョンは近い場所、例：Singapore）
+2. プロジェクトの **Connect** で接続文字列（`postgresql://...`）をコピーする
+3. **Render**（https://render.com）に GitHub アカウントでサインアップし、**New → Blueprint** でこのリポジトリと公開したいブランチを選ぶ
+4. `DATABASE_URL` の入力欄に 2 でコピーした接続文字列を貼り、**Apply** を押す
+5. 数分で `https://spot-stamp-xxxx.onrender.com` が発行される。`/api/health` が `"storage":"postgres"` を返せば成功
 
-※ データ保存用ディスクを使うため有料プラン（starter）になります。HTTPS で公開されるので、スマホの位置情報（現在地・現地認定）も使えます。
+無料プランの注意点:
+- **起動待ち**: 15分ほど誰も使わないとサーバーが休止し、次に開いたとき起動まで30秒〜1分ほどかかります。その間もアプリは端末内のデータで動き、つながったら自動で同期します。
+- **容量**: Neon の無料枠は 0.5GB です。写真は端末で自動的に縮小（1枚あたりおよそ100〜300KB）してから送るので、数千枚程度は保存できます。
+
+`DATABASE_URL` を設定しなかった場合は `DATA_DIR` 配下のファイルに保存します（ローカル開発やディスク付きの有料サーバー向け）。
 
 ## データの信頼性まわり
 
@@ -57,6 +63,7 @@ PORT=8787 DATA_DIR=./data npm start   # dist/ と API を1プロセスで配信
 
 ```bash
 npm test            # ユニットテスト + API テスト（vitest）
+TEST_DATABASE_URL=postgres://... npm test   # Postgres 版の API テストも実行
 npm run typecheck
 npm run build && npm start &
 npm run e2e -- http://localhost:8787   # Playwright で、スマホ2台分の共有シナリオを確認

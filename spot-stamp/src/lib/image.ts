@@ -25,7 +25,7 @@ async function loadBitmap(file: Blob): Promise<ImageBitmap | HTMLImageElement> {
   }
 }
 
-export async function compressImage(file: File, maxSide = 1280, quality = 0.8): Promise<Blob> {
+export async function compressImage(file: File, maxSide = 1080, quality = 0.75): Promise<Blob> {
   if (!file.type.startsWith('image/')) throw new ImageError('画像ファイルを選んでください');
   if (file.size > MAX_INPUT_BYTES) throw new ImageError('画像が大きすぎます（30MBまで）');
   let src: ImageBitmap | HTMLImageElement;
@@ -50,7 +50,7 @@ export async function compressImage(file: File, maxSide = 1280, quality = 0.8): 
   for (let i = 0; i < 4; i++) {
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', q));
     if (!blob) throw new ImageError('画像の変換に失敗しました');
-    if (blob.size <= 1_200_000 || i === 3) return blob;
+    if (blob.size <= 500_000 || i === 3) return blob;
     q -= 0.15;
   }
   throw new ImageError('画像の変換に失敗しました');

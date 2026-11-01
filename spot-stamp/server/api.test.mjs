@@ -3,8 +3,13 @@ import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp } from './index.mjs';
-import { RoomStore } from './store.mjs';
+import { RoomStore, FileBackend, PostgresBackend } from './store.mjs';
 
+// Postgres のテストは TEST_DATABASE_URL があるときだけ実行（例: postgres://postgres@localhost:5433/postgres）
+const PG_URL = process.env.TEST_DATABASE_URL;
+const backends = [{ name: 'file' }, ...(PG_URL ? [{ name: 'postgres' }] : [])];
+
+describe.each(backends)('API ($name)', ({ name }) => {
 let dir, server, base;
 // 1x1 の JPEG
 const JPEG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
@@ -15,16 +20,23 @@ const req = (method, p, body) =>
 
 beforeAll(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), 'spostamp-'));
-  ({ server } = await createApp({ dataDir: dir, staticDir: path.join(dir, 'nodist') }));
+  if (name === 'postgres') {
+    const { default: pg } = await import('pg');
+    const c = new pg.Client({ connectionString: PG_URL });
+    await c.connect();
+    await c.query('DROP TABLE IF EXISTS spostamp_rooms, spostamp_photos');
+    await c.end();
+  }
+  ({ server } = await createApp({ dataDir: dir, staticDir: path.join(dir, 'nodist'), databaseUrl: name === 'postgres' ? PG_URL : '' }));
   await new Promise((r) => server.listen(0, r));
   base = `http://127.0.0.1:${server.address().port}`;
 });
 afterAll(async () => {
-  server.close();
+  await new Promise((r) => server.close(r));
   await rm(dir, { recursive: true, force: true });
 });
 
-describe('API', () => {
+{
   it('スポットの登録・取得・写真配信', async () => {
     const put = await req('PUT', '/api/rooms/test-room/spots/spot-0001', { spot: spot(), photoData: JPEG });
     expect(put.status).toBe(200);
@@ -89,11 +101,34 @@ describe('API', () => {
     );
     const st = await req('GET', '/api/rooms/race-room/state');
     expect(st.body.spots).toHaveLength(30);
-    // ディスク上のファイルも正しい JSON
-    const file = JSON.parse(await readFile(path.join(dir, 'rooms', 'race-room.json'), 'utf8'));
-    expect(Object.keys(file.spots)).toHaveLength(30);
-    // 再起動後も読める
-    const s2 = new RoomStore(dir);
+    if (name === 'file') {
+      // ディスク上のファイルも正しい JSON
+      const file = JSON.parse(await readFile(path.join(dir, 'rooms', 'race-room.json'), 'utf8'));
+      expect(Object.keys(file.spots)).toHaveLength(30);
+    }
+    // 再起動後（新しいストア）でも読める
+    const s2 = new RoomStore(name === 'postgres' ? new PostgresBackend(PG_URL) : new FileBackend(dir));
+    await s2.init();
     expect((await s2.getState('race-room')).spots).toHaveLength(30);
+    await s2.close();
   });
+
+  // file 版は1プロセス前提（別インスタンス間のロックは無い）なので postgres のみ
+  it.skipIf(name === 'file')('2つのサーバー（別プロセス相当）から同時に書いても失われない', async () => {
+    const a = new RoomStore(name === 'postgres' ? new PostgresBackend(PG_URL) : new FileBackend(dir));
+    await a.init();
+    await Promise.all([
+      ...Array.from({ length: 10 }, (_, i) => a.addVisit('race-room', 'race-0000', `user-a${String(i).padStart(4, '0')}`, 'a', 1)),
+      ...Array.from({ length: 10 }, (_, i) => req('PUT', '/api/rooms/race-room/visits/race-0000', { userId: `user-b${String(i).padStart(4, '0')}`, at: 1 })),
+    ]);
+    await a.close();
+    const st = await req('GET', '/api/rooms/race-room/state');
+    expect(Object.keys(st.body.visits['race-0000'])).toHaveLength(20);
+  });
+
+  it('health でストレージ種別がわかる', async () => {
+    const h = await req('GET', '/api/health');
+    expect(h.body).toEqual({ ok: true, storage: name });
+  });
+}
 });
