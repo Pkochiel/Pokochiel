@@ -215,6 +215,28 @@ export class PostgresBackend {
   }
 }
 
+/**
+ * 貼り付けミスに強い DATABASE_URL の正規化。
+ * Neon の画面から `psql 'postgresql://...'` の形でコピーされた場合や、前後の引用符・空白を許容する。
+ * @param {string} raw
+ */
+export function cleanDatabaseUrl(raw) {
+  let s = String(raw).trim();
+  s = s.replace(/^psql\s+/i, '').trim();
+  s = s.replace(/^DATABASE_URL\s*=\s*/i, '').trim();
+  s = s.replace(/^['"]|['"]$/g, '').trim();
+  let url;
+  try {
+    url = new URL(s);
+  } catch {
+    throw new Error('DATABASE_URL が正しくありません。postgresql:// で始まる接続文字列を設定してください');
+  }
+  if (url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') {
+    throw new Error(`DATABASE_URL は postgresql:// で始まる必要があります（現在: ${url.protocol}）`);
+  }
+  return s;
+}
+
 /** 業務ロジック（保存先に依存しない） */
 export class RoomStore {
   /** @param {Backend} backend */
@@ -225,7 +247,7 @@ export class RoomStore {
   /** 環境に応じて保存先を選ぶ */
   static fromEnv(opts = {}) {
     const url = /** @type {any} */ (opts).databaseUrl ?? process.env.DATABASE_URL;
-    if (url) return new RoomStore(new PostgresBackend(url));
+    if (url && String(url).trim()) return new RoomStore(new PostgresBackend(cleanDatabaseUrl(url)));
     return new RoomStore(new FileBackend(/** @type {any} */ (opts).dataDir));
   }
 
@@ -233,8 +255,25 @@ export class RoomStore {
     return this.backend instanceof PostgresBackend ? 'postgres' : 'file';
   }
 
-  init() {
-    return this.backend.init();
+  async init() {
+    try {
+      await this.backend.init();
+    } catch (err) {
+      if (this.kind === 'postgres') {
+        // 接続先のホスト名だけ出す（パスワードはログに出さない）
+        let host = '?';
+        try {
+          host = new URL(/** @type {PostgresBackend} */ (this.backend).connectionString).hostname;
+        } catch {
+          /* ignore */
+        }
+        console.error(
+          `[db] データベース(${host})に接続できませんでした: ${/** @type {Error} */ (err).message}\n` +
+            '     DATABASE_URL（Neon の接続文字列）が正しいか、DB が起動しているかを確認してください。',
+        );
+      }
+      throw err;
+    }
   }
 
   close() {

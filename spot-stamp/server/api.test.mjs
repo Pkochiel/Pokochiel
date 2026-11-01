@@ -132,3 +132,18 @@ afterAll(async () => {
   });
 }
 });
+
+import { cleanDatabaseUrl } from './store.mjs';
+describe('cleanDatabaseUrl', () => {
+  const u = 'postgresql://user:pw@ep-x.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+  it('貼り付けミスを補正する', () => {
+    expect(cleanDatabaseUrl(u)).toBe(u);
+    expect(cleanDatabaseUrl(`psql '${u}'`)).toBe(u);
+    expect(cleanDatabaseUrl(`  "${u}"\n`)).toBe(u);
+    expect(cleanDatabaseUrl(`DATABASE_URL=${u}`)).toBe(u);
+  });
+  it('不正な値はわかりやすいエラー', () => {
+    expect(() => cleanDatabaseUrl('xxxx')).toThrow(/DATABASE_URL/);
+    expect(() => cleanDatabaseUrl('https://example.com')).toThrow(/postgresql/);
+  });
+});
