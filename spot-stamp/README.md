@@ -32,6 +32,17 @@ PORT=8787 DATA_DIR=./data npm start   # dist/ と API を1プロセスで配信
 
 環境変数: `PORT`, `DATA_DIR`（JSON と写真の保存先）, `VITE_TILE_URL` / `VITE_TILE_ATTRIBUTION`（地図タイルの差し替え用。Mapbox などに変える場合）, `VITE_API_BASE`。
 
+## インターネットに公開（Render）
+
+リポジトリ直下の `render.yaml`（Blueprint）にすべての設定が入っています。
+
+1. https://render.com に GitHub アカウントでサインアップ
+2. ダッシュボードの **New → Blueprint** を選び、このリポジトリと公開したいブランチを選択
+3. 内容（Web サービス `spot-stamp`、1GB ディスク `/var/data`）を確認して **Apply**
+4. 数分で `https://spot-stamp-xxxx.onrender.com` が発行されます
+
+※ データ保存用ディスクを使うため有料プラン（starter）になります。HTTPS で公開されるので、スマホの位置情報（現在地・現地認定）も使えます。
+
 ## データの信頼性まわり
 
 - **端末に先に保存する方式**: すべての操作はまず端末（localStorage、写真は IndexedDB）に保存し、送信キューから順番にサーバーへ送ります。オフラインや移動中で電波が途切れてもデータは失われず、つながったら自動で再送します（指数バックオフ、`online` イベント、画面復帰時）。

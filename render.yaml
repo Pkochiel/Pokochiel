@@ -1,0 +1,22 @@
+# Render Blueprint: スポスタ（spot-stamp/）を Web サービスとして公開する設定
+# Render ダッシュボードの New → Blueprint でこのリポジトリを選ぶと自動で構成されます。
+services:
+  - type: web
+    name: spot-stamp
+    runtime: node
+    rootDir: spot-stamp
+    # 永続ディスクは有料プランでのみ利用可能（無料プランだと再起動でデータが消える）
+    plan: starter
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: spot-stamp-data
+      mountPath: /var/data
+      sizeGB: 1
