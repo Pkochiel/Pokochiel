@@ -60,6 +60,24 @@ npm run build      # next build
 | `NEXT_PUBLIC_APP_VERSION` | Backup ファイルの `appVersion` |
 | `NEXT_PUBLIC_BUILD_ID` | Service Worker のキャッシュ名 |
 
+## 2-b. 公開先（URL の発行）
+
+サーバー処理を持たないので、静的ホスティングにそのまま載る。2通り用意してある。
+
+| | URL | 設定 | 更新 |
+|---|---|---|---|
+| GitHub Pages | `https://pkochiel.github.io/Pokochiel/`（起動画面は `/dashboard/`） | `.github/workflows/pages.yml` | 対象ブランチへの push で自動 |
+| Render（静的サイト） | `https://speed-reading-lab-xxxx.onrender.com` | `render.yaml` | 選んだブランチへの push で自動 |
+
+Render で公開する手順（スポスタと同じ流れ。データベースは要らない）:
+
+1. Render（https://render.com）で **New → Blueprint** を選び、このリポジトリと公開したいブランチを選ぶ
+2. **Apply** を押す。数分で `https://speed-reading-lab-xxxx.onrender.com` が発行される
+
+静的サイトなので無料プランでも休止（起動待ち）はない。記録は各端末の IndexedDB にだけ保存されるので、
+**公開した URL を他の人に渡しても、記録が混ざったり見えたりすることはない。**
+GitHub Pages と Render は配信元（オリジン）が違うので、片方で積んだ記録はもう片方からは見えない。
+
 ## 3. PWA のキャッシュ更新
 
 Service Worker は `/sw.js?build=<BUILD_ID>` として登録する。
