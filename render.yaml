@@ -1,0 +1,23 @@
+# Render Blueprint: Speed Reading Lab を無料で公開する設定
+#
+# Render ダッシュボードの New → Blueprint でこのリポジトリとブランチを選ぶと自動で構成される。
+# このアプリはサーバー処理を持たない（全ページ静的・記録は端末内の IndexedDB）ので、
+# 静的サイトとして配る。無料で、Web サービスのような休止（起動待ち）もない。
+services:
+  - type: web
+    name: speed-reading-lab
+    runtime: static
+    # 同じコミットからは同じビルド ID にする（Service Worker のキャッシュ名に使う）
+    buildCommand: npm ci && BUILD_ID=$RENDER_GIT_COMMIT npm run build
+    staticPublishPath: ./out
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # next.config.ts の静的書き出しに切り替える（out/ に出力される）
+      - key: STATIC_EXPORT
+        value: "true"
+    headers:
+      # Service Worker 本体は常に取り直させる。古い sw.js が残ると更新が届かない
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache

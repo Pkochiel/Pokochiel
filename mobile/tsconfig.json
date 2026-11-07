@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    // TypeScript 6 から @types/* は自動では読まれない。使うものを挙げる。
+    // node は app.config.ts（Expo CLI が Node で読む）の process.env のため。
+    "types": ["jest", "node"]
+  }
+}
