@@ -118,18 +118,19 @@ describe('buildPatternSheet', () => {
     expect(patterns.size).toBeGreaterThan(columns.length * 0.8)
   })
 
-  it('ターンごとに3枚作る', () => {
+  it('〇・一・二・三の順に4ターン', () => {
     const sheets = buildPatternSheets('day')
+    expect(sheets.map((s) => s.targetLabel)).toEqual(['〇', '一', '二', '三'])
     expect(sheets.map((s) => s.targetLabel)).toEqual([...PATTERN_SHEET.targets])
   })
 
-  it('3ターンとも同じ並びのシートになる', () => {
-    // 教室と同じく1枚の紙を3回見る。並びは同じで、探す字だけが変わる。
-    const [first, second, third] = buildPatternSheets('day')
+  it('どのターンも同じ並びのシートになる', () => {
+    // 教室と同じく1枚の紙を繰り返し見る。並びは同じで、探す字だけが変わる。
+    const sheets = buildPatternSheets('day')
+    const [first, second] = sheets
     const labels = (s: typeof first) =>
       s!.columns.map((c) => c.cells.map((cell) => cell.label).join('')).join('|')
-    expect(labels(second)).toBe(labels(first))
-    expect(labels(third)).toBe(labels(first))
+    for (const other of sheets) expect(labels(other)).toBe(labels(first))
     // 対象の印だけが違う。
     expect(second!.columns[0]!.cells.findIndex((c) => c.target)).not.toBe(
       first!.columns[0]!.cells.findIndex((c) => c.target),

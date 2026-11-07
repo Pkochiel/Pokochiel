@@ -26,7 +26,7 @@ import { btrExercise, type BtrExercise } from './exercises'
 
 export type BtrJudgement = 'advance' | 'stay' | 'fallback'
 
-/** 漢数字一行の3ターンぶんの対象の総数。1列に1つずつ入っている。 */
+/** 漢数字一行の全ターンぶんの対象の総数。1列に1つずつ入っている。 */
 const patternSheetTotal = PATTERN_SHEET.columnCount * PATTERN_SHEET.targets.length
 
 export interface LevelRule {
@@ -99,7 +99,7 @@ export const LEVEL_RULES: Partial<Record<BtrExercise, LevelRule>> = {
     // 教室がそうしているかは確認できていない（docs/BTR_METHOD.md §9）。
     timeLimits: [PATTERN_SHEET.turnMs, 75_000, 60_000, 50_000, 40_000],
     // 1列に対象がちょうど1つあるので、拾えた数はそのまま到達した列数になる。
-    // 3ターンぶんの合計に対する割合で置く。
+    // 全ターンぶんの合計に対する割合で置く。
     advanceScore: Math.round(patternSheetTotal * PATTERN_SHEET.advanceRatio),
     advanceAccuracy: 90,
     fallbackScore: Math.round(patternSheetTotal * PATTERN_SHEET.fallbackRatio),

@@ -11,8 +11,9 @@ import {
   type PatternSheet,
 } from '@/core/training/btr/pattern-sheet'
 import { timeLimitAt } from '@/core/training/btr/progression'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
-import { BtrIntro, BtrResult, BtrTimerBar } from './shared/btr-shell'
+import { BtrIntro, BtrResult, BtrScreen, BtrTimerBar } from './shared/btr-shell'
 import { useCountdown } from './shared/use-countdown'
 import type { BtrBlockProps } from './shared/btr-block'
 
@@ -20,7 +21,11 @@ import type { BtrBlockProps } from './shared/btr-block'
  * 漢数字一行（BTRメソッド 認知視野拡大 / パターンシート）
  *
  * 〇〜九の漢数字を縦書きに並べた列が右から左へ80本。
- * そこから対象の漢数字だけを拾う。一・二・三の3ターン、各90秒。
+ * そこから対象の漢数字だけを拾う。〇・一・二・三の4ターン、各90秒。
+ *
+ * **ターンが終わるたびに止める。** 時計を回したまま次の字へ移らせず、
+ * そのターンに拾えた数と到達した列を見せてから、自分で次のターンを始めてもらう。
+ * 続けて流すと、前の字を探していた目のまま次の字に入ってしまい、ターンの区切りが消える。
  *
  * 実物のシートに合わせ、列は縦書きで右から左に読む向きに置く。
  * 5刻みで列に番号を振る。
@@ -28,7 +33,7 @@ import type { BtrBlockProps } from './shared/btr-block'
 
 export type PatternSheetBlockProps = BtrBlockProps
 
-type Phase = 'intro' | 'running' | 'result'
+type Phase = 'intro' | 'running' | 'break' | 'result'
 
 export function PatternSheetBlock({ seed, level = 0, onComplete }: PatternSheetBlockProps) {
   const [phase, setPhase] = useState<Phase>('intro')
@@ -44,8 +49,8 @@ export function PatternSheetBlock({ seed, level = 0, onComplete }: PatternSheetB
     (result: PatternResult) => {
       setResults((current) => {
         const next = [...current, result]
-        if (next.length >= targets.length) setPhase('result')
-        else setTurn(next.length)
+        // 最後のターンでなければ、ここで止めて区切りの画面を出す。
+        setPhase(next.length >= targets.length ? 'result' : 'break')
         return next
       })
     },
@@ -72,10 +77,47 @@ export function PatternSheetBlock({ seed, level = 0, onComplete }: PatternSheetB
         <p>
           「{targets.join('」「')}」の順に {targets.length} ターン、各{' '}
           {Math.round(timeLimitMs / 1000)} 秒です。
+          <strong className="text-fg">ターンごとに止まります。</strong>
+          準備ができたら次のターンを始めてください。
           いくつあるかは伝えません。端から順に見ていってください。
         </p>
         <p>列には5刻みで番号がついています。どこまで進んだかの目印です。</p>
       </BtrIntro>
+    )
+  }
+
+  if (phase === 'break') {
+    const done = results.length
+    const nextTarget = targets[done]
+    const last = results[done - 1]
+    return (
+      <BtrScreen>
+        <p className="text-xs font-semibold tracking-[0.18em] text-brand uppercase">
+          {done} / {targets.length} ターン終わり
+        </p>
+        <h2 className="mt-3 flex items-baseline gap-2">
+          <span className="tabular text-5xl font-semibold">{last?.found ?? 0}</span>
+          <span className="text-sm text-fg-muted">
+            個（「{targets[done - 1]}」・{last?.reachedColumn ?? 0} 列目まで）
+          </span>
+        </h2>
+
+        <TurnTable targets={targets} results={results} />
+
+        <p className="mt-6 text-sm leading-relaxed text-fg-muted">
+          一息ついてから始めてください。押すまで時間は進みません。
+        </p>
+        <Button
+          size="lg"
+          className="mt-4 w-full sm:w-auto"
+          onClick={() => {
+            setTurn(done)
+            setPhase('running')
+          }}
+        >
+          次のターンへ（「{nextTarget}」を探す）
+        </Button>
+      </BtrScreen>
     )
   }
 
@@ -104,14 +146,14 @@ export function PatternSheetBlock({ seed, level = 0, onComplete }: PatternSheetB
       score={found}
       scoreUnit={`個（${results.map((r) => r.found).join('・')}）`}
       lines={[
-        {
-          label: '到達した列',
-          value: results.map((r) => r.reachedColumn).join('・'),
-        },
+        ...results.map((result, index) => ({
+          label: `${index + 1} ターン目「${targets[index]}」`,
+          value: `${result.found} 個・${result.reachedColumn} 列目まで`,
+        })),
         { label: '見落とし', value: `${missed} 個` },
         { label: '押し間違い', value: `${wrong} 回` },
       ]}
-      note="ターンごとの拾えた数と、到達した列を並べて記録します。"
+      note="ターンごとの拾えた数を並べて記録します。"
       onNext={() =>
         onComplete({
           score: found,
@@ -121,6 +163,33 @@ export function PatternSheetBlock({ seed, level = 0, onComplete }: PatternSheetB
         })
       }
     />
+  )
+}
+
+/** ここまでのターンの記録。終わったターンだけ数字を入れ、残りは空けておく。 */
+function TurnTable({
+  targets,
+  results,
+}: {
+  targets: readonly string[]
+  results: readonly PatternResult[]
+}) {
+  return (
+    <dl className="mt-6 divide-y divide-border rounded-2xl border border-border bg-surface">
+      {targets.map((label, index) => {
+        const result = results[index]
+        return (
+          <div key={label} className="flex items-center justify-between px-4 py-3">
+            <dt className="text-sm text-fg-muted">
+              {index + 1} ターン目「{label}」
+            </dt>
+            <dd className="tabular text-sm font-medium">
+              {result ? `${result.found} 個・${result.reachedColumn} 列目まで` : '—'}
+            </dd>
+          </div>
+        )
+      })}
+    </dl>
   )
 }
 
