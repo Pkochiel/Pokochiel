@@ -21,8 +21,9 @@ import type { BtrBlockProps } from './shared/btr-block'
  * どの2列も1〜3か所しか違わないので、拾い読みでは当たらない。
  * 文の頭だけ見て決めると外れるところがこの種目の要点である。
  *
- * **お題は1セットのあいだ変わらない。** 変わるのは列の並びだけ。
- * 毎問お題を読み直す形にすると、探す時間より読む時間のほうが長くなる。
+ * **文の型は1セットのあいだ変わらず、お題の文は1問ごとに変わる。**
+ * 並ぶ8列はセットを通して同じ8通りなので、お題が変わっても読み直すのは
+ * 差し替え箇所だけで済む。お題まで固定すると、覚えた形を照合するだけになる。
  */
 
 export type UnitBookBlockProps = BtrBlockProps
@@ -34,7 +35,7 @@ export function UnitBookBlock({ seed, level = 0, onComplete }: UnitBookBlockProp
   const [index, setIndex] = useState(0)
   const [feedback, setFeedback] = useState<{ position: number; correct: boolean } | null>(null)
 
-  const { target, questions } = useMemo(() => buildUnitBookSet({ seed }), [seed])
+  const { questions } = useMemo(() => buildUnitBookSet({ seed }), [seed])
   const timeLimitMs =
     UNIT_BOOK.timeLimits[Math.min(level, UNIT_BOOK.timeLimits.length - 1)] ??
     UNIT_BOOK.timeLimits[0]!
@@ -95,6 +96,7 @@ export function UnitBookBlock({ seed, level = 0, onComplete }: UnitBookBlockProp
         </p>
         <p>
           どれも1〜3か所しか違いません。文の頭だけ見て決めると外れます。
+          <strong className="text-fg">お題は1問ごとに変わります。</strong>
           {questions.length} 問を {Math.round(timeLimitMs / 1000)} 秒で。
         </p>
       </BtrIntro>
@@ -111,9 +113,9 @@ export function UnitBookBlock({ seed, level = 0, onComplete }: UnitBookBlockProp
         />
         <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col justify-center gap-5 px-3 pt-14 pb-6 sm:px-6">
           <div>
-            <p className="text-xs text-fg-muted">この文を探す（セットのあいだ変わりません）</p>
+            <p className="text-xs text-fg-muted">この文を探す</p>
             <p className="mt-2 rounded-xl border border-brand bg-brand-soft px-4 py-3 text-base font-medium">
-              {target}
+              {question.target}
             </p>
           </div>
 

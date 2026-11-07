@@ -6,9 +6,11 @@ import { createRandom, hashString, seededShuffle } from '../../util/seeded-shuff
  * 縦一行のユニットが8列並ぶ。どれもよく似た文で、位置は毎回入れ替わる。
  * お題の文がどの列にあるかを、どれだけ速く見つけられるかを見る。正解数で級を判定する。
  *
- * **お題は1セットのあいだ変わらない。** 変わるのは列の並びだけである。
- * 毎問お題を読み直す形にすると、探す時間より読む時間のほうが長くなり、
- * 「見つける速さ」を測れなくなる。
+ * **文の型は1セットのあいだ変わらず、お題の文は1問ごとに変わる。**
+ * 型を固定するので、並ぶ8列はセットを通して同じ8通り（おじいさん／おばあさん、
+ * 山／川…）で、読み直す手間は差し替え箇所の3つだけで済む。お題まで固定すると
+ * 2問目からは覚えた形を照合するだけになり、文を掴み直す訓練にならない。
+ * 型を毎問変えると、今度は探す時間より読む時間のほうが長くなる。
  *
  * 例（教室で使われている形）：
  *
@@ -106,6 +108,8 @@ export interface UnitBookColumn {
 
 export interface UnitBookQuestion {
   readonly id: string
+  /** 探す文。1問ごとに変わる（型はセットのあいだ同じ）。 */
+  readonly target: string
   /** 画面に並べる順。position はこの並びの添字と一致する。 */
   readonly columns: readonly UnitBookColumn[]
   /** 正解の列 */
@@ -113,10 +117,8 @@ export interface UnitBookQuestion {
 }
 
 export interface UnitBookSet {
-  /** 使った文の型 */
+  /** 使った文の型。**1セットのあいだ変わらない。** */
   readonly templateId: string
-  /** 探す文。**1セットのあいだ変わらない。** */
-  readonly target: string
   readonly questions: readonly UnitBookQuestion[]
 }
 
@@ -139,8 +141,9 @@ export interface BuildUnitBookInput {
 /**
  * 1セットぶんの出題を作る。
  *
- * 文の型とお題は**セットの最初に1度だけ**決める。以降の問題で変わるのは
- * 列の並びだけで、並びが毎回変わるので位置を覚えて答えることはできない。
+ * 文の型は**セットの最初に1度だけ**決める。お題はその型の8通りから1問ごとに選ぶ。
+ * 8問ごとに8通りを並べ直して配るので、どの文も同じくらいの回数お題になり、
+ * 続けて同じお題になることもない。列の並びも毎問変わる。
  */
 export function buildUnitBookSet(input: BuildUnitBookInput): UnitBookSet {
   const { seed, count = UNIT_BOOK.questionCount } = input
@@ -149,22 +152,42 @@ export function buildUnitBookSet(input: BuildUnitBookInput): UnitBookSet {
     UNIT_TEMPLATES[Math.floor(random() * UNIT_TEMPLATES.length)] ?? UNIT_TEMPLATES[0]
 
   if (count <= 0 || template === undefined) {
-    return { templateId: template?.id ?? '', target: '', questions: [] }
+    return { templateId: template?.id ?? '', questions: [] }
   }
 
   const texts = allChoices().map((choices) => template.build(choices))
-  const target = texts[Math.floor(random() * texts.length)] ?? texts[0]!
+  const targets = dealTargets(texts, count, seed)
 
   const questions = Array.from({ length: count }, (_, index): UnitBookQuestion => {
+    const target = targets[index]!
     const shuffled = seededShuffle(texts, `${seed}:unit-book:${index}`)
     return {
       id: `ub-${index + 1}`,
+      target,
       columns: shuffled.map((text, position) => ({ position, text })),
       answerPosition: shuffled.indexOf(target),
     }
   })
 
-  return { templateId: template.id, target, questions }
+  return { templateId: template.id, questions }
+}
+
+/**
+ * お題を配る。8通りを1巡ずつ並べ直してつなぐ。
+ *
+ * 巡の継ぎ目で前の巡の最後と同じ文が先頭に来たら、2番目と入れ替える。
+ * 続けて同じお題が出ると、探さずに前の答えを押すだけで当たってしまう。
+ */
+function dealTargets(texts: readonly string[], count: number, seed: string): string[] {
+  const targets: string[] = []
+  for (let round = 0; targets.length < count; round += 1) {
+    const deck = seededShuffle(texts, `${seed}:unit-book:targets:${round}`)
+    if (deck.length > 1 && deck[0] === targets[targets.length - 1]) {
+      ;[deck[0], deck[1]] = [deck[1]!, deck[0]!]
+    }
+    targets.push(...deck)
+  }
+  return targets.slice(0, count)
 }
 
 export interface UnitBookResult {

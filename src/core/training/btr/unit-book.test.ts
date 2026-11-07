@@ -47,26 +47,50 @@ describe('buildUnitBookSet', () => {
   })
 
   it('お題が正解の列の文と一致する', () => {
-    const built = set()
-    for (const question of built.questions) {
-      expect(question.columns[question.answerPosition]?.text).toBe(built.target)
+    for (const question of questions()) {
+      expect(question.columns[question.answerPosition]?.text).toBe(question.target)
     }
   })
 
-  it('お題が1セットのあいだ変わらない', () => {
-    // 毎問お題を読み直す形にすると、探す時間より読む時間のほうが長くなり、
-    // 「見つける速さ」を測れなくなる。
-    const built = set()
-    expect(built.target).not.toBe('')
-    // お題は列のどれかであり、どの問題でもその文が必ず含まれる。
-    for (const question of built.questions) {
-      expect(question.columns.map((column) => column.text)).toContain(built.target)
+  it('お題が1問ごとに変わる', () => {
+    // お題まで固定すると、2問目からは覚えた形を照合するだけになる。
+    const targets = questions().map((question) => question.target)
+    for (let i = 1; i < targets.length; i += 1) {
+      expect(targets[i], `${i + 1} 問目`).not.toBe(targets[i - 1])
     }
   })
 
-  it('お題は列のいずれかの文である', () => {
-    const built = set()
-    expect(built.questions[0]!.columns.map((c) => c.text)).toContain(built.target)
+  it('文の型は1セットのあいだ変わらない', () => {
+    // 並ぶ8列はセットを通して同じ8通り。変わるのは並びとお題だけ。
+    const built = questions()
+    const first = new Set(built[0]!.columns.map((column) => column.text))
+    for (const question of built) {
+      expect(new Set(question.columns.map((column) => column.text))).toEqual(first)
+      expect(first.has(question.target)).toBe(true)
+    }
+  })
+
+  it('8通りのどれも同じくらいの回数お題になる', () => {
+    // 8問ごとに8通りを1巡ずつ配る。20問なら各2〜3回。
+    const counts = new Map<string, number>()
+    for (const question of questions()) {
+      counts.set(question.target, (counts.get(question.target) ?? 0) + 1)
+    }
+    expect(counts.size).toBe(UNIT_BOOK.columns)
+    for (const count of counts.values()) {
+      expect(count).toBeGreaterThanOrEqual(Math.floor(UNIT_BOOK.questionCount / UNIT_BOOK.columns))
+      expect(count).toBeLessThanOrEqual(Math.ceil(UNIT_BOOK.questionCount / UNIT_BOOK.columns))
+    }
+  })
+
+  it('多く出題しても続けて同じお題にならない', () => {
+    // 巡の継ぎ目で同じ文が続かないこと。
+    for (const seed of ['a', 'b', 'c', 'd', 'e']) {
+      const targets = buildUnitBookSet({ seed, count: 100 }).questions.map((q) => q.target)
+      for (let i = 1; i < targets.length; i += 1) {
+        expect(targets[i], `${seed}: ${i + 1} 問目`).not.toBe(targets[i - 1])
+      }
+    }
   })
 
   it('どの2列も1〜3か所しか違わない', () => {
@@ -109,8 +133,9 @@ describe('buildUnitBookSet', () => {
     expect(buildUnitBookSet({ seed: 'day', count: 0 }).questions).toEqual([])
   })
 
-  it('同じ種なら同じお題になる', () => {
-    expect(set('x').target).toBe(set('x').target)
+  it('同じ種なら同じ型とお題の並びになる', () => {
+    expect(set('x').templateId).toBe(set('x').templateId)
+    expect(questions('x').map((q) => q.target)).toEqual(questions('x').map((q) => q.target))
   })
 })
 
